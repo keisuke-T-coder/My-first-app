@@ -16,26 +16,20 @@ export default function ReportMenu() {
           <div className="w-16"></div> {/* 中央揃えのための余白 */}
         </div>
 
-        {/* 担当者選択 & Addボタン */}
-        <div className="mt-5 flex justify-end items-center gap-2">
-          {/* プルダウン */}
-          <div className="bg-white border border-gray-100 rounded-full px-5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] flex items-center flex-1 max-w-[220px]">
-            <span className="mr-2 text-sm font-bold text-gray-500">担当:</span>
-            <select className="bg-transparent font-black text-slate-800 outline-none appearance-none cursor-pointer pr-2 relative text-sm w-full">
-              <option value="">選択してください</option>
+        {/* 担当者選択（プルダウン内にAddを統合） */}
+        <div className="mt-5 flex justify-end">
+          <div className="bg-white border border-gray-100 rounded-full px-5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] flex items-center relative w-[160px]">
+            <select className="bg-transparent font-black text-slate-800 outline-none appearance-none cursor-pointer w-full text-sm z-10 text-center">
+              <option value="">担当者選択</option>
               <option value="sato">佐藤</option>
               <option value="tanaka">田中</option>
               <option value="minami">南</option>
               <option value="nitta">新田</option>
               <option value="tokushige">德重</option>
+              <option value="add">＋ 追加 (Add)</option>
             </select>
-            <span className="text-[10px] text-gray-400 pointer-events-none">▼</span>
+            <span className="text-[10px] text-gray-400 pointer-events-none absolute right-4">▼</span>
           </div>
-          
-          {/* 追加(Add)ボタン */}
-          <button className="bg-white border border-gray-100 rounded-full w-10 h-10 flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform text-[#eaaa43]" aria-label="担当者を追加">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          </button>
         </div>
       </div>
 
@@ -63,7 +57,7 @@ export default function ReportMenu() {
           <div className="w-[50%] max-w-[50px] h-[2px] bg-[#cba358]"></div>
         </div>
 
-        {/* A-4 高速代・遠隔地（新規追加） */}
+        {/* A-4 高速代・遠隔地 */}
         <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] py-8 flex flex-col items-center justify-center active:scale-95 transition-transform border border-transparent hover:border-orange-100 cursor-pointer">
           <h2 className="text-[1.1rem] font-black text-gray-900 tracking-widest mb-1 leading-tight text-center">高速代<br/>遠隔地</h2>
           <p className="text-[10px] text-gray-400 font-medium mb-3 mt-1">A-4</p>
