@@ -4,19 +4,49 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 
 export default function ReportMenu() {
-  // === 状態管理（モックアップ用のアニメーション・切り替えスイッチ） ===
-  const [assignee, setAssignee] = useState(""); // 担当者
+  const [assignee, setAssignee] = useState(""); 
   
-  // A-5: お知らせ機能の状態
-  const [isNoticeEditMode, setIsNoticeEditMode] = useState(false);
-  const [isNoticeActive, setIsNoticeActive] = useState(true);
+  // === スワイプ・カルーセルの状態管理 ===
+  // 0: お知らせ, 1: たったできること, 2: 集計
+  // （※テストのため、初期値は「通知オフ(false)」で、中央の「1」を表示しています）
+  const [isNoticeActive, setIsNoticeActive] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(1);
+
   const [noticeText, setNoticeText] = useState("【重要】25日は経費の締め日です。忘れずに申請をお願いします。");
   const [draftNoticeText, setDraftNoticeText] = useState(noticeText);
-
-  // A-5: 集計テーブルの状態
   const [summaryPeriod, setSummaryPeriod] = useState<'day' | 'month' | 'year'>('month');
 
-  // モックアップ用のダミーデータ（期間ごとの数値）
+  // スワイプ操作のための座標管理
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+  const onTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    if (isLeftSwipe && activeIndex < 2) {
+      setActiveIndex(prev => prev + 1); // 右のパネルへ
+    }
+    if (isRightSwipe && activeIndex > 0) {
+      setActiveIndex(prev => prev - 1); // 左のパネルへ
+    }
+  };
+
+  // お知らせ保存処理
+  const handleSaveNotice = () => {
+    setNoticeText(draftNoticeText);
+    alert(isNoticeActive ? "通知をオンにしました。次回からアプリを開くとこの画面が優先表示されます。" : "通知をオフにしました。");
+  };
+
   const mockData = {
     day: { tech: 15000, repair: 25000, sales: 0 },
     month: { tech: 450000, repair: 600000, sales: 200000 },
@@ -27,18 +57,11 @@ export default function ReportMenu() {
   const repairPercent = totalRev === 0 ? 0 : Math.round((currentData.repair / totalRev) * 100);
   const salesPercent = totalRev === 0 ? 0 : Math.round((currentData.sales / totalRev) * 100);
 
-  // お知らせ保存処理
-  const handleSaveNotice = () => {
-    setNoticeText(draftNoticeText);
-    setIsNoticeEditMode(false);
-  };
-
   return (
     <div className="min-h-screen bg-[#f8f6f0] flex flex-col items-center font-sans pb-32 relative overflow-x-hidden text-slate-800">
       
       {/* 画面上部エリア */}
       <div className="w-[92%] max-w-md mt-6 mb-6">
-        {/* オレンジヘッダー */}
         <div className="bg-[#eaaa43] rounded-[14px] py-4 px-4 shadow-sm flex items-center justify-between">
           <Link href="/" className="text-white font-bold flex items-center w-16 active:scale-90 transition-transform">
             <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg>
@@ -48,7 +71,6 @@ export default function ReportMenu() {
           <div className="w-16"></div>
         </div>
 
-        {/* 担当者選択 */}
         <div className="mt-5 flex justify-end">
           <div className="bg-white border border-gray-100 rounded-full px-5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] flex items-center relative w-[160px]">
             <select 
@@ -94,134 +116,156 @@ export default function ReportMenu() {
       </div>
 
       {/* =========================================
-          A-5: ダッシュボードエリア（お知らせ・スローガン・集計）
+          A-5: スワイプ式ダッシュボードエリア
       ========================================= */}
-      <div className="w-[92%] max-w-md flex flex-col gap-6">
+      <div className="w-[92%] max-w-md mx-auto mb-6">
         
-        {/* ② お知らせエリア（優先表示＆設定機能） */}
-        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 relative">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-[#eaaa43] font-bold text-sm tracking-widest flex items-center">
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-              お知らせ設定
-            </h3>
-            {/* 編集モード切り替えボタン */}
-            <button onClick={() => setIsNoticeEditMode(!isNoticeEditMode)} className="text-gray-400 hover:text-[#eaaa43] transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-            </button>
-          </div>
+        {/* スワイプを検知する枠 */}
+        <div 
+          className="overflow-hidden w-full pb-2"
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+        >
+          {/* 横に3つ並んだパネル（transformでスライドさせる） */}
+          <div 
+            className="flex transition-transform duration-300 ease-out w-[300%] items-stretch"
+            style={{ transform: `translateX(-${activeIndex * (100 / 3)}%)` }}
+          >
+            
+            {/* 0: お知らせ作成パネル（左） */}
+            <div className="w-1/3 px-1.5">
+              <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 h-full flex flex-col">
+                <h3 className="text-[#eaaa43] font-bold text-sm tracking-widest mb-4 flex items-center">
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                  お知らせ作成
+                </h3>
+                <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+                  <span className="text-sm font-bold text-gray-700">通知オン（優先表示）</span>
+                  <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${isNoticeActive ? 'bg-[#eaaa43]' : 'bg-gray-300'}`} onClick={() => setIsNoticeActive(!isNoticeActive)}>
+                    <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${isNoticeActive ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                  </div>
+                </div>
+                {isNoticeActive ? (
+                  <div className="flex flex-col flex-1">
+                    <textarea 
+                      value={draftNoticeText}
+                      onChange={(e) => setDraftNoticeText(e.target.value)}
+                      className="w-full text-sm p-3 border border-gray-200 rounded-lg outline-none focus:border-[#eaaa43] resize-none h-24 mb-3"
+                      placeholder="お知らせ内容を入力..."
+                    />
+                    <button onClick={handleSaveNotice} className="w-full bg-[#eaaa43] text-white font-bold py-2.5 rounded-lg active:scale-95 transition-transform mt-auto">
+                      更新する
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center">
+                    <p className="text-xs text-gray-400 text-center leading-relaxed bg-gray-50 p-4 rounded-lg">現在、通知はオフです。<br/>右上のスイッチをオンにすると<br/>お知らせを作成できます。</p>
+                  </div>
+                )}
+              </div>
+            </div>
 
-          {/* 編集モード */}
-          {isNoticeEditMode ? (
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-bold text-gray-700">通知オン（優先表示）</span>
-                {/* トグルスイッチ */}
-                <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${isNoticeActive ? 'bg-[#eaaa43]' : 'bg-gray-300'}`} onClick={() => setIsNoticeActive(!isNoticeActive)}>
-                  <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${isNoticeActive ? 'translate-x-6' : 'translate-x-0'}`}></div>
+            {/* 1: たったできることパネル（中央・デフォルト） */}
+            <div className="w-1/3 px-1.5">
+              <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 h-full">
+                <div className="flex items-center justify-center mb-5">
+                  <h3 className="text-gray-800 font-black text-base tracking-widest relative inline-block">
+                    たったできること
+                    <div className="absolute -bottom-1 left-0 w-full h-1.5 bg-[#eaaa43] opacity-30 rounded-full"></div>
+                  </h3>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-2.5 flex items-center justify-center text-center h-[85px]">
+                    <p className="text-[11px] font-bold text-gray-700 leading-snug">リピート率向上<br/><span className="text-[9px] text-gray-500 font-medium block mt-1 scale-90">(名札着用必須・名刺活用)</span></p>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-2.5 flex items-center justify-center text-center h-[85px]">
+                    <p className="text-[11px] font-bold text-gray-700 leading-snug">緊急時の案内<br/><span className="text-[9px] text-gray-500 font-medium block mt-1 scale-90">(止水栓・水道メーター)</span></p>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-2.5 flex items-center justify-center text-center h-[85px]">
+                    <p className="text-[11px] font-bold text-gray-700 leading-snug">インターフォン<br/>越しの名札提示</p>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-2.5 flex items-center justify-center text-center h-[85px]">
+                    <p className="text-[11px] font-bold text-gray-700 leading-snug">訪問前日在宅確認<br/><span className="text-[9px] text-gray-500 font-medium block mt-1 scale-90">(1週間以上経過時)</span></p>
+                  </div>
                 </div>
               </div>
-              {isNoticeActive && (
-                <textarea 
-                  value={draftNoticeText}
-                  onChange={(e) => setDraftNoticeText(e.target.value)}
-                  className="w-full text-sm p-3 border border-gray-200 rounded-lg outline-none focus:border-[#eaaa43] resize-none h-24 mb-3"
-                  placeholder="お知らせ内容を入力..."
-                />
-              )}
-              <button onClick={handleSaveNotice} className="w-full bg-[#eaaa43] text-white font-bold py-2 rounded-lg active:scale-95 transition-transform">
-                お知らせを更新
-              </button>
             </div>
-          ) : (
-            /* 表示モード（オンの時だけ表示） */
-            isNoticeActive ? (
-              <div className="bg-orange-50 border-l-4 border-[#eaaa43] p-4 rounded-r-xl">
-                <p className="text-sm text-gray-800 leading-relaxed font-medium whitespace-pre-wrap">{noticeText}</p>
+
+            {/* 2: 集計テーブルパネル（右） */}
+            <div className="w-1/3 px-1.5">
+              <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[#eaaa43] font-bold text-sm tracking-widest">集計</h3>
+                  <span className="text-[10px] text-gray-500 font-medium bg-gray-100 px-2 py-1 rounded-full border border-gray-200">
+                    {assignee === "" ? "会社全体" : assignee === "sato" ? "佐藤" : assignee === "tanaka" ? "田中" : assignee === "minami" ? "南" : assignee === "nitta" ? "新田" : assignee === "tokushige" ? "德重" : "会社全体"}
+                  </span>
+                </div>
+                <div className="flex gap-2 mb-4 bg-gray-50 p-1 rounded-lg">
+                  <button onClick={() => setSummaryPeriod('day')} className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition-colors ${summaryPeriod === 'day' ? 'bg-white text-[#eaaa43] shadow-sm' : 'text-gray-400'}`}>当日</button>
+                  <button onClick={() => setSummaryPeriod('month')} className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition-colors ${summaryPeriod === 'month' ? 'bg-white text-[#eaaa43] shadow-sm' : 'text-gray-400'}`}>当月</button>
+                  <button onClick={() => setSummaryPeriod('year')} className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition-colors ${summaryPeriod === 'year' ? 'bg-white text-[#eaaa43] shadow-sm' : 'text-gray-400'}`}>年</button>
+                </div>
+                <table className="w-full text-xs mb-4">
+                  <tbody>
+                    <tr className="border-b border-gray-50">
+                      <td className="py-2 text-gray-500 font-medium">技術料</td>
+                      <td className="py-2 text-right font-black text-gray-800"><span className="text-[10px] text-gray-400 font-normal mr-1">¥</span>{currentData.tech.toLocaleString()}</td>
+                    </tr>
+                    <tr className="border-b border-gray-50">
+                      <td className="py-2 text-[#547b97] font-bold">修理合計</td>
+                      <td className="py-2 text-right font-black text-[#547b97]"><span className="text-[10px] font-normal mr-1">¥</span>{currentData.repair.toLocaleString()}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 text-[#d98c77] font-bold">販売金額</td>
+                      <td className="py-2 text-right font-black text-[#d98c77]"><span className="text-[10px] font-normal mr-1">¥</span>{currentData.sales.toLocaleString()}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div>
+                  <div className="flex justify-between text-[9px] font-bold mb-1">
+                    <span className="text-[#547b97]">修理 {repairPercent}%</span>
+                    <span className="text-gray-400 tracking-widest scale-90">売上構成比</span>
+                    <span className="text-[#d98c77]">販売 {salesPercent}%</span>
+                  </div>
+                  <div className="flex w-full h-2.5 rounded-full overflow-hidden bg-gray-100">
+                    <div className="bg-[#547b97] transition-all duration-500" style={{ width: `${repairPercent}%` }}></div>
+                    <div className="bg-[#d98c77] transition-all duration-500" style={{ width: `${salesPercent}%` }}></div>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <p className="text-xs text-gray-400 text-center py-2">現在、優先表示されるお知らせはありません（通知オフ）</p>
-            )
-          )}
-        </div>
+            </div>
 
-        {/* ① 今期のスローガン（デフォルト表示） */}
-        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5">
-          <div className="flex items-center justify-center mb-4">
-            <h3 className="text-gray-800 font-black text-base tracking-widest relative inline-block">
-              たったできること
-              <div className="absolute -bottom-1 left-0 w-full h-1 bg-[#eaaa43] opacity-30 rounded-full"></div>
-            </h3>
-          </div>
-          {/* 一回り小さめのグリッド */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 flex items-center justify-center text-center h-20">
-              <p className="text-[11px] font-bold text-gray-700 leading-snug">リピート率向上<br/><span className="text-[9px] text-gray-500 font-medium">(名札着用必須・名刺活用)</span></p>
-            </div>
-            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 flex items-center justify-center text-center h-20">
-              <p className="text-[11px] font-bold text-gray-700 leading-snug">緊急時の案内<br/><span className="text-[9px] text-gray-500 font-medium">(止水栓・水道メーター位置)</span></p>
-            </div>
-            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 flex items-center justify-center text-center h-20">
-              <p className="text-[11px] font-bold text-gray-700 leading-snug">インターフォン越しの<br/>名札提示</p>
-            </div>
-            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 flex items-center justify-center text-center h-20">
-              <p className="text-[11px] font-bold text-gray-700 leading-snug">訪問前日在宅確認の徹底<br/><span className="text-[9px] text-gray-500 font-medium">(1週間以上経過時)</span></p>
-            </div>
           </div>
         </div>
 
-        {/* ③ 集計テーブル */}
-        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[#eaaa43] font-bold text-sm tracking-widest">集計テーブル</h3>
-            <span className="text-[10px] text-gray-500 font-medium bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
-              対象: {assignee === "" ? "会社全体" : assignee === "sato" ? "佐藤" : assignee === "tanaka" ? "田中" : assignee === "minami" ? "南" : assignee === "nitta" ? "新田" : assignee === "tokushige" ? "德重" : "会社全体"}
-            </span>
+        {/* 下部のナビゲーション表示（<< お知らせ　集計 >>） */}
+        <div className="flex justify-between items-center text-[11px] font-bold text-gray-400 px-3 mt-1 h-6">
+          <button 
+            onClick={() => setActiveIndex(activeIndex - 1)} 
+            className={`w-24 text-left tracking-wider ${activeIndex === 0 ? 'opacity-0 pointer-events-none' : ''}`}
+          >
+            &lt;&lt; {activeIndex === 1 ? "お知らせ" : "できること"}
+          </button>
+          
+          {/* 現在位置を示すドット */}
+          <div className="flex gap-1.5 justify-center flex-1">
+            <span className={`w-1.5 h-1.5 rounded-full transition-colors ${activeIndex === 0 ? 'bg-[#eaaa43] w-3' : 'bg-gray-200'}`}></span>
+            <span className={`w-1.5 h-1.5 rounded-full transition-colors ${activeIndex === 1 ? 'bg-[#eaaa43] w-3' : 'bg-gray-200'}`}></span>
+            <span className={`w-1.5 h-1.5 rounded-full transition-colors ${activeIndex === 2 ? 'bg-[#eaaa43] w-3' : 'bg-gray-200'}`}></span>
           </div>
 
-          {/* 期間切り替えボタン */}
-          <div className="flex gap-2 mb-5 bg-gray-50 p-1 rounded-lg">
-            <button onClick={() => setSummaryPeriod('day')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${summaryPeriod === 'day' ? 'bg-white text-[#eaaa43] shadow-sm' : 'text-gray-400'}`}>当日</button>
-            <button onClick={() => setSummaryPeriod('month')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${summaryPeriod === 'month' ? 'bg-white text-[#eaaa43] shadow-sm' : 'text-gray-400'}`}>当月</button>
-            <button onClick={() => setSummaryPeriod('year')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${summaryPeriod === 'year' ? 'bg-white text-[#eaaa43] shadow-sm' : 'text-gray-400'}`}>年</button>
-          </div>
-
-          {/* 数値テーブル */}
-          <table className="w-full text-sm mb-5">
-            <tbody>
-              <tr className="border-b border-gray-50">
-                <td className="py-2.5 text-gray-500 font-medium">技術料</td>
-                <td className="py-2.5 text-right font-black text-gray-800"><span className="text-xs text-gray-400 font-normal mr-1">¥</span>{currentData.tech.toLocaleString()}</td>
-              </tr>
-              <tr className="border-b border-gray-50">
-                <td className="py-2.5 text-[#547b97] font-bold">修理合計</td>
-                <td className="py-2.5 text-right font-black text-[#547b97]"><span className="text-xs font-normal mr-1">¥</span>{currentData.repair.toLocaleString()}</td>
-              </tr>
-              <tr>
-                <td className="py-2.5 text-[#d98c77] font-bold">販売金額</td>
-                <td className="py-2.5 text-right font-black text-[#d98c77]"><span className="text-xs font-normal mr-1">¥</span>{currentData.sales.toLocaleString()}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          {/* 構成比グラフ */}
-          <div>
-            <div className="flex justify-between text-[10px] font-bold mb-1">
-              <span className="text-[#547b97]">修理 {repairPercent}%</span>
-              <span className="text-gray-400 tracking-widest">売上構成比</span>
-              <span className="text-[#d98c77]">販売 {salesPercent}%</span>
-            </div>
-            {/* バー */}
-            <div className="flex w-full h-3 rounded-full overflow-hidden bg-gray-100">
-              <div className="bg-[#547b97] transition-all duration-500" style={{ width: `${repairPercent}%` }}></div>
-              <div className="bg-[#d98c77] transition-all duration-500" style={{ width: `${salesPercent}%` }}></div>
-            </div>
-          </div>
+          <button 
+            onClick={() => setActiveIndex(activeIndex + 1)} 
+            className={`w-24 text-right tracking-wider ${activeIndex === 2 ? 'opacity-0 pointer-events-none' : ''}`}
+          >
+            {activeIndex === 0 ? "できること" : "集計"} &gt;&gt;
+          </button>
         </div>
 
       </div>
 
-      {/* 画面下のナビゲーションバー */}
+      {/* 画面下のタブバー */}
       <div className="fixed bottom-0 w-full bg-white rounded-t-[30px] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] h-[70px] flex justify-around items-center px-4 max-w-md mx-auto pb-2 z-10">
         <Link href="/" className="p-2 cursor-pointer">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -236,7 +280,6 @@ export default function ReportMenu() {
         <div className="p-2 cursor-pointer">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </div>
-        <span className="absolute bottom-[6px] right-4 text-[10px] text-gray-400 italic">app version 1.0</span>
       </div>
 
     </div>
