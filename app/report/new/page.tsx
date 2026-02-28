@@ -4,10 +4,8 @@ import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
-// 取得したGASのURL
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyi3gbullz4u0EqXBkhMVxiqfZq0-PKdhim9QVrSyl1q4SvBaS46GX5lzsyZrAu5j8u2A/exec';
 
-// --- 各種選択肢 ---
 const assignees = ["佐藤", "田中", "南", "新田", "德重"];
 const areas = ["市内南部エリア", "市街地エリア", "市内北部エリア", "日置エリア", "北薩エリア", "南薩エリア", "大隅エリア", "鹿屋エリア", "姶良エリア", "霧島エリア", "その他"];
 const clients = ["リビング", "ハウス", "ひだまり", "タカギ", "トータルサービス", "LTS"];
@@ -122,11 +120,16 @@ function ReportForm() {
     };
 
     try {
+      // ★ 最強の回避策：データを「URLパラメータ形式」に変換して送る
+      const formBody = new URLSearchParams();
+      formBody.append('data', JSON.stringify(payload));
+
       await fetch(GAS_URL, {
         method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ params: payload })
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formBody,
       });
 
       setSubmitMessage("送信しました。お疲れ様でした");
@@ -154,14 +157,15 @@ function ReportForm() {
       });
 
     } catch (error) {
-      setSubmitMessage("通信エラーが発生しました。");
+      // エラーの正体を画面に表示させる
+      const errorMessage = error instanceof Error ? error.message : "不明なエラー";
+      setSubmitMessage(`通信エラー: ${errorMessage}`);
       setShowConfirm(false);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // ★修正箇所：text-sm を text-base (16px) に変更し、iOSの強制ズームを防止
   const inputBaseClass = "w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-base text-gray-800 focus:outline-none focus:border-[#eaaa43] focus:ring-1 focus:ring-[#eaaa43] transition-all appearance-none";
   const labelClass = "block text-xs font-bold text-gray-600 mb-1.5 ml-1";
   const selectWrapperClass = "relative after:content-['▼'] after:text-gray-400 after:text-[10px] after:absolute after:right-4 after:top-1/2 after:-translate-y-1/2 after:pointer-events-none";
@@ -170,7 +174,6 @@ function ReportForm() {
     <div className="flex flex-col items-center w-full">
       <div className="w-[92%] max-w-md mt-6 mb-6">
         <div className="bg-[#eaaa43] rounded-[14px] py-4 px-4 shadow-sm flex items-center justify-between">
-          {/* ★修正箇所：戻るボタンのリンク先を /report に変更 */}
           <Link href="/report" className="text-white font-bold flex items-center w-16 active:scale-90 transition-transform">
             <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg>
             <span className="text-sm tracking-wider">戻る</span>
@@ -467,7 +470,6 @@ function ReportForm() {
   );
 }
 
-// --- メインページ（Suspenseでラップしてエクスポート） ---
 export default function NewReportPage() {
   return (
     <div className="min-h-screen bg-[#f8f6f0] font-sans text-slate-800 pb-32">
