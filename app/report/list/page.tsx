@@ -132,7 +132,7 @@ function ReportList() {
                 
                 <div className={`rounded-[11px] p-3.5 w-full relative overflow-hidden flex flex-col gap-1.5 ${isHighway ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100'} ${isContracted && !isHighway ? 'border-none' : 'border'}`}>
                   
-                  {/* ★ 修正：車のアイコンを大きく（110px）、濃く（opacity-40）して目立たせる */}
+                  {/* 車のアイコン透かし */}
                   {isHighway && (
                     <div className="absolute right-[-10px] top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center transform -rotate-12 opacity-40 text-blue-400">
                       <svg width="110" height="110" viewBox="0 0 24 24" fill="currentColor">
@@ -170,7 +170,6 @@ function ReportList() {
                   <div className="flex justify-between items-end mt-1 relative z-10">
                     <div className="flex gap-1.5 flex-wrap">
                       {isContracted && <span className="bg-gradient-to-r from-red-500 to-purple-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold shadow-sm">成約</span>}
-                      {/* ★ 修正：文言を「遠隔・高速利用: 〇〇」に変更 */}
                       {isHighway && <span className="bg-blue-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold shadow-sm border border-blue-400">遠隔・高速利用: {item.伝票番号}</span>}
                     </div>
                     <div className="flex gap-2.5 text-[11px] font-black">
@@ -187,6 +186,11 @@ function ReportList() {
                   {/* タップして開く詳細エリア */}
                   {isExpanded && (
                     <div className={`mt-3 pt-3 border-t ${isHighway ? 'border-blue-200' : 'border-gray-100'} text-[11px] space-y-2 animate-fade-in relative z-10`}>
+                      {/* ★ 追加：依頼内容 */}
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 font-bold">依頼内容</span>
+                        <span className="font-black text-gray-700">{item.依頼内容}</span>
+                      </div>
                       <div className="flex justify-between">
                         <span className="text-gray-500 font-bold">状況</span>
                         <span className={`font-black px-2 py-0.5 rounded ${item.状況 === '完了' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{item.状況}</span>
