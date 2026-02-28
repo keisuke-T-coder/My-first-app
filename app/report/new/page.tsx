@@ -1,82 +1,54 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation'; // A-0からの引き継ぎ用
+import { useSearchParams } from 'next/navigation';
 
-// ★GASのウェブアプリURL（ID不要版、適宜貼り替えてください） ★修正
-const GAS_URL = 'Https://script.google.com/macros/s/AKfycbz8DPZRzFo7ic3P8Jxh0MlNTDLPgVPsvckapv27msD23hn24uzqc8fFT5eW3K72K5LqWA/exec';
+// 取得したGASのURL
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyi3gbullz4u0EqXBkhMVxiqfZq0-PKdhim9QVrSyl1q4SvBaS46GX5lzsyZrAu5j8u2A/exec';
 
-// --- 一覧データの定義 (厳守) ---
-
-// 担当者一覧
-const workers = ["佐藤", "田中", "南", "新田", "德重"];
-
-// エリア一覧
-const areas = [
-  "市内南部エリア", "市街地エリア", "市内北部エリア", "日置エリア", "北薩エリア",
-  "南薩エリア", "大隅エリア", "鹿屋エリア", "姶良エリア", "霧島エリア", "その他"
-];
-
-// 品目一覧
-const items = [
-  "トイレ", "キッチン", "洗面", "浴室", "ドア", "窓サッシ", "水栓",
-  "エクステリア", "照明換気設備", "内装設備", "外装設備"
-];
-
-// 依頼内容一覧
-const requestContents = [
-  "水漏れ", "作動不良", "開閉不良", "破損", "異音", "詰り関係", "その他"
-];
-
-// 作業内容一覧
-const workContents = [
-  "部品交換", "製品交換、取付", "清掃", "点検", "見積", "応急処置", "その他"
-];
-
-// 提案内容一覧
-const proposalContents = [
-  "サティス", "プレアス", "アメージュ", "パッソ", "KA", "KB", "水栓", "その他"
-];
-
-// 状況一覧
+// --- 各種選択肢 ---
+const assignees = ["佐藤", "田中", "南", "新田", "德重"];
+const areas = ["市内南部エリア", "市街地エリア", "市内北部エリア", "日置エリア", "北薩エリア", "南薩エリア", "大隅エリア", "鹿屋エリア", "姶良エリア", "霧島エリア", "その他"];
+const clients = ["リビング", "ハウス", "ひだまり", "タカギ", "トータルサービス", "LTS"];
+const items = ["トイレ", "キッチン", "洗面", "浴室", "ドア", "窓サッシ", "水栓", "エクステリア", "照明換気設備", "内装設備", "外装設備"];
+const requestContents = ["水漏れ", "作動不良", "開閉不良", "破損", "異音", "詰り関係", "その他"];
+const workContents = ["部品交換", "製品交換、取付", "清掃", "点検", "見積", "応急処置", "その他"];
+const proposalContents = ["サティス", "プレアス", "アメージュ", "パッソ", "KA", "KB", "水栓", "その他"];
 const statuses = ["完了", "再訪予定", "部品手配", "見積", "保留"];
 
-
 export default function NewReport() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const selectedWorkerFromUrl = searchParams.get('worker') || ''; // A-0から引き継いだ名前（クエリパラメータ）
+  // A-0から引き継いだ担当者を初期値に設定
+  const defaultWorker = searchParams.get('worker') || ""; 
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [response, setResponse] = useState<{status: string, message: string} | null>(null);
-  
-  // ★送信前確認モーダルの開閉状態ギミック
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-
-  // === 状態管理（フォームの入力値や切り替え状態） ===
-  // 指示された全項目（メモ欄なし、image_3.png基準）を完全に厳守
   const [formData, setFormData] = useState({
-    日付: new Date().toISOString().split('T')[0], // 今日を初期値（カレンダー入力）
-    開始時間: '', // （時間選択入力）
-    終了時間: '', // （時間選択入力：開始時間の30分後が自動設定）
-    担当者名: selectedWorkerFromUrl, // ★A-0から引き継いだ名前（クエリパラメータ）を初期選択に設定（仕様B）
-    "訪問先名（クライアント名）": '', // （訪問先（お客様名など）：自由テキスト入力）
-    エリア: '', // （エリア（プルダウン選択）：（空欄）選択してください）
-    品目: '', // （品目（プルダウン選択）：（空欄）選択してください）
-    依頼内容: '', // （依頼内容（プルダウン選択）：（空欄）選択してください）
-    作業内容: '', // （作業内容（プルダウン選択）：（空欄）選択してください）
-    "作業区分（修理or販売)": '修理', // （作業区分（カプセル型トグルスイッチ）：修理）
-    技術料: '0', // （技術料：数値入力、円単位、初期値：0）
-    修理金額: '0', // （修理金額/販売金額：数値入力、円単位、初期値：0、トグルによりラベルと色が変化）
-    販売金額: '0', // （修理金額/販売金額：数値入力、円単位、初期値：0、トグルによりラベルと色が変化、赤字）
-    提案有無: '無', // （提案有無（カプセル型トグルスイッチ）：無）
-    提案内容: '', // （提案内容（「有」選択時のみ表示。プルダウン選択肢＋「その他」時の自由入力）：（空欄）選択してください。プルダウンを開くと、サティス、プレアス、その他などの選択肢が表示されます）
-    提案内容自由入力: '', // その他選択時の自由入力欄
-    遠隔高速利用: '無', // （遠隔、高速利用（カプセル型トグルスイッチ）：無）
-    伝票番号: '', // （伝票番号（「有」選択時のみ表示）：伝票番号を入力してください、オレンジ枠）
-    ステータス: '完了', // （状況（プルダウン選択）：完了）
-    社内用メモ: '' // ★元のコード（image_3.png：メモ欄なし）の構成を完全に維持します。社内用メモ: アプリからは送れません。空欄になります。メモ textarea。
+    日付: new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replaceAll('/', '-'),
+    開始時間: '',
+    終了時間: '',
+    担当者: defaultWorker,
+    訪問先: '',
+    エリア: '',
+    クライアント: '',
+    品目: '',
+    依頼内容: '',
+    作業内容: '',
+    作業区分: '修理',
+    技術料: '0',
+    修理金額: '0',
+    販売金額: '0',
+    提案有無: '無',
+    提案内容: '',
+    提案内容詳細: '', // 「その他」用
+    遠隔高速利用: '無',
+    伝票番号: '',
+    状況: '完了',
+    メモ: ''
   });
+
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState("");
 
   // 時間入力時の自動計算ロジック（開始時間 + 30分 = 終了時間の初期値）
   const handleStartTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -84,7 +56,6 @@ export default function NewReport() {
     let endTime = formData.終了時間;
 
     if (startTime && !endTime) {
-      // 開始時間が入力され、終了時間が空の場合だけ計算
       const [hours, minutes] = startTime.split(':').map(Number);
       let endMinutes = minutes + 30;
       let endHours = hours;
@@ -93,534 +64,439 @@ export default function NewReport() {
         endHours = (hours + 1) % 24;
         endMinutes = endMinutes - 60;
       }
-      
       endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
     }
 
     setFormData({ ...formData, 開始時間: startTime, 終了時間: endTime });
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleToggleChange = (name: string, value: string) => {
+  const handleToggle = (name: string, value: string) => {
     setFormData({ ...formData, [name]: value });
   };
 
-  // ★「内容確認する」ボタンを押した時のギミック。fetch通信は開始されません。送信の前には確認画面(入力した一覧を表示)
   const handleOpenConfirm = (e: React.FormEvent) => {
     e.preventDefault();
-    setShowConfirmModal(true);
+    setShowConfirm(true);
   };
 
-  // ★確認モーダルの「提出する」ボタンを押した時のみ、fetch通信を開始。飛ばす。送信が成功したら"送信しました。お疲れ様でした"。
   const handleSubmit = async () => {
-    setShowConfirmModal(false); // モーダルを閉じる
-    setIsLoading(true);
-    setResponse(null);
+    setIsSubmitting(true);
+    setSubmitMessage("");
 
-    // 金額を数値に変換するなど、データの正規化
+    // 修理と販売の金額を明確に分けるロジック
+    const techFee = Number(formData.技術料) || 0;
+    const repairAmt = formData.作業区分 === '修理' ? (Number(formData.修理金額) || 0) : 0;
+    const salesAmt = formData.作業区分 === '販売' ? (Number(formData.販売金額) || 0) : 0;
+    
+    // 提案内容の結合
+    const finalProposal = formData.提案内容 === 'その他' ? formData.提案内容詳細 : formData.提案内容;
+
     const payload = {
-      ...formData,
-      技術料: Number(formData.技術料) || 0,
-      修理金額: Number(formData.修理金額) || 0,
-      販売金額: Number(formData.販売金額) || 0,
-      // 提案内容の自由入力を反映
-      提案内容: formData.提案内容 === 'その他' ? formData.提案内容自由入力 : formData.提案内容
+      日付: formData.日付,
+      開始時間: formData.開始時間,
+      終了時間: formData.終了時間,
+      担当者: formData.担当者,
+      訪問先: formData.訪問先,
+      エリア: formData.エリア,
+      クライアント: formData.クライアント,
+      品目: formData.品目,
+      依頼内容: formData.依頼内容,
+      作業内容: formData.作業内容,
+      作業区分: formData.作業区分,
+      技術料: techFee,
+      修理金額: repairAmt,
+      販売金額: salesAmt,
+      提案有無: formData.提案有無,
+      提案内容: finalProposal,
+      遠隔高速利用: formData.遠隔高速利用,
+      伝票番号: formData.伝票番号,
+      状況: formData.状況,
+      メモ: formData.メモ
     };
 
     try {
-      // GASへPOSTリクエストを送信
-      // mode: 'no-cors' で送信
       await fetch(GAS_URL, {
         method: 'POST',
-        mode: 'no-cors', 
+        mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params: payload }) // GAS側の jsonData.params に合わせる
+        body: JSON.stringify({ params: payload })
       });
 
-      // no-cors のため戻り値は判定せず成功メッセージを表示。"送信しました。お疲れ様でした"
-      setResponse({ status: 'success', message: '日報データをGAS経由で送信しました。\n送信しました。お疲れ様でした。スプレッドシートを確認してください。' });
+      setSubmitMessage("送信しました。お疲れ様でした");
+      setShowConfirm(false);
       
-      // フォームを初期化（日付、担当者、ステータスは維持）
+      // フォームリセット (一部保持)
       setFormData({
         ...formData,
         開始時間: '',
         終了時間: '',
-        "訪問先名（クライアント名）": '',
+        訪問先: '',
         エリア: '',
+        クライアント: '',
         品目: '',
         依頼内容: '',
         作業内容: '',
-        "作業区分（修理or販売)": '修理',
         技術料: '0',
         修理金額: '0',
         販売金額: '0',
         提案有無: '無',
         提案内容: '',
-        提案内容自由入力: '',
+        提案内容詳細: '',
         遠隔高速利用: '無',
         伝票番号: '',
-        社内用メモ: ''
+        メモ: ''
       });
 
     } catch (error) {
-      console.error(error);
-      setResponse({ status: 'error', message: 'GASとの通信に失敗しました。' });
+      setSubmitMessage("通信エラーが発生しました。");
+      setShowConfirm(false);
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  // 元のコード（image_3.png）の共通デザインクラス（厳守）
-  const inputBaseClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:border-[#eaaa43] focus:ring-2 focus:ring-[#eaaa43]/20 transition-all font-medium appearance-none";
-  const labelClass = "block text-xs font-bold text-gray-500 mb-1 ml-1";
-  const selectArrowClass = "relative after:content-['▼'] after:text-gray-400 after:text-xs after:absolute after:right-4 after:top-1/2 after:-translate-y-1/2 after:pointer-events-none";
-
-  // モーダル内の Disabled UI 用クラス ★新規ギミック
-  const disabledBaseClass = `${inputBaseClass} opacity-70 pointer-events-none`;
-  const confirmLabelClass = "w-24 text-xs font-bold text-gray-400 text-right";
-  const confirmValClass = "flex-1 text-sm font-bold text-gray-900";
+  // 共通のスタイルクラス
+  const inputBaseClass = "w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:border-[#eaaa43] focus:ring-1 focus:ring-[#eaaa43] transition-all appearance-none";
+  const labelClass = "block text-xs font-bold text-gray-600 mb-1.5 ml-1";
+  const selectWrapperClass = "relative after:content-['▼'] after:text-gray-400 after:text-[10px] after:absolute after:right-4 after:top-1/2 after:-translate-y-1/2 after:pointer-events-none";
 
   return (
-    <div className="min-h-screen bg-[#f8f6f0] flex flex-col items-center font-sans pb-32 relative overflow-x-hidden text-slate-800">
+    <div className="min-h-screen bg-[#f8f6f0] flex flex-col items-center font-sans pb-32 relative text-slate-800">
       
       {/* 画面上部エリア */}
-      <div className="w-full bg-white pt-10 pb-4 px-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)] sticky top-0 z-50 flex items-center justify-between">
-        <Link href="/" className="text-gray-500 text-2xl">〈</Link>
-        <h1 className="text-gray-900 font-bold text-base tracking-widest">A-1 新規入力</h1>
-        {/* 引き継いだ名前を表示する右上バッジギミック */}
-        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center border border-gray-200 shadow-inner">
-          <span className="text-gray-500 font-bold text-xs">{formData.担当者名 || '南'}</span>
+      <div className="w-[92%] max-w-md mt-6 mb-6">
+        <div className="bg-[#eaaa43] rounded-[14px] py-4 px-4 shadow-sm flex items-center justify-between">
+          <Link href="/" className="text-white font-bold flex items-center w-16 active:scale-90 transition-transform">
+            <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg>
+            <span className="text-sm tracking-wider">戻る</span>
+          </Link>
+          <h1 className="text-white font-bold tracking-widest text-lg flex-1 text-center">新規入力</h1>
+          <div className="w-16 flex justify-end">
+            <div className="bg-white/20 px-3 py-1 rounded-full border border-white/30 text-white text-xs font-bold shadow-inner">
+              {formData.担当者 || "未選択"}
+            </div>
+          </div>
         </div>
       </div>
 
-      <form onSubmit={handleOpenConfirm} className="w-[92%] max-w-md mt-6 flex flex-col gap-4">
+      {submitMessage && (
+        <div className={`w-[92%] max-w-md mb-4 p-4 rounded-xl text-center text-sm font-bold shadow-sm ${submitMessage.includes('エラー') ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-white text-[#eaaa43] border border-[#eaaa43]'}`}>
+          {submitMessage}
+        </div>
+      )}
+
+      <form onSubmit={handleOpenConfirm} className="w-[92%] max-w-md flex flex-col gap-5">
         
-        {/* レスポンスメッセージ */}
-        {response && (
-          <div className={`p-4 rounded-xl text-sm font-bold ${response.status === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-            {response.message.split('\n').map((msg, i) => <p key={i}>{msg}</p>)}
-          </div>
-        )}
-
-        {/* 1. 基本情報 セクション (image_3.png基準) */}
-        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 space-y-3.5">
-          <div className="flex justify-between items-center mb-1 pb-2 border-b border-gray-100">
-            <h2 className="text-sm font-bold text-[#eaaa43] flex items-center gap-1.5">
-              <span className="text-base">📋</span> 基本情報
-            </h2>
-            <div className="text-xs font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">01</div>
+        {/* 01 基本情報 */}
+        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-6">
+          <div className="flex justify-between items-end mb-4 border-b border-gray-100 pb-2">
+            <h2 className="text-[1.1rem] font-bold text-[#eaaa43] tracking-wider">基本情報</h2>
+            <span className="text-gray-300 font-black text-xl leading-none">01</span>
           </div>
           
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>日付</label>
-              {/* （カレンダー選択入力） */}
-              <input type="date" name="日付" value={formData.日付} onChange={handleInputChange} required className={inputBaseClass} />
-            </div>
-            {/* ★元のselect仕様 */}
-            <div className={selectArrowClass}>
-              <label className={labelClass}>担当者名</label>
-              {/* 初期状態で引き継いだ名前を選択させるギミック（仕様B） */}
-              <select name="担当者名" value={formData.担当者名} onChange={handleInputChange} className={inputBaseClass}>
-                {/* （空欄）選択してください */}
-                <option value="">(選択)</option>
-                {/* 佐藤、田中、南、新田、德重 */}
-                {workers.map(w => <option key={w} value={w}>{w}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <div>
-              <label className={labelClass}>開始時間</label>
-              {/* （時間選択入力） */}
-              <input type="time" name="開始時間" value={formData.開始時間} onChange={handleStartTimeChange} required className={inputBaseClass} />
-            </div>
-            <div>
-              <label className={labelClass}>終了時間</label>
-              {/* （時間選択入力：開始時間の30分後が自動設定ギミック付き） */}
-              <input type="time" name="終了時間" value={formData.終了時間} onChange={handleInputChange} required className={inputBaseClass} />
-            </div>
-          </div>
-        </div>
-
-        {/* 2. 業務詳細 セクション (image_3.png基準) */}
-        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 space-y-3.5">
-          <div className="flex justify-between items-center mb-1 pb-2 border-b border-gray-100">
-            <h2 className="text-sm font-bold text-[#eaaa43] flex items-center gap-1.5">
-              <span className="text-base">👤</span> 業務詳細
-            </h2>
-            <div className="text-xs font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">02</div>
-          </div>
-
-          <div>
-            <label className={labelClass}>訪問先（お客様名など）</label>
-            {/* （訪問先（お客様名など）：自由テキスト入力） */}
-            <input type="text" name="訪問先名（クライアント名）" value={formData["訪問先名（クライアント名）"]} onChange={handleInputChange} placeholder="山田太郎様、〇〇マンション" required className={inputBaseClass} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>エリア</label>
-              <input type="text" name="エリア" value={formData.エリア} onChange={handleInputChange} placeholder="福岡市中央区" required className={inputBaseClass} />
-            </div>
-            {/* エリア一覧 プルダウン選択ギミック */}
-            <div className={selectArrowClass}>
-              <label className={labelClass}>エリア（選択可）</label>
-              <select name="エリア" value={formData.エリア} onChange={handleInputChange} className={inputBaseClass}>
-                <option value="">(空欄) 選択してください</option>
-                {areas.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* 品目一覧、依頼内容一覧、作業内容一覧 select ▼ プルダウン選択ギミック */}
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <div className={selectArrowClass}>
-              <label className={labelClass}>品目</label>
-              <select name="品目" value={formData.品目} onChange={handleInputChange} required className={inputBaseClass}>
-                <option value="">選択してください</option>
-                {items.map(i => <option key={i} value={i}>{i}</option>)}
-              </select>
-            </div>
-            <div className={selectArrowClass}>
-              <label className={labelClass}>依頼内容</label>
-              <select name="依頼内容" value={formData.依頼内容} onChange={handleInputChange} required className={inputBaseClass}>
-                <option value="">選択してください</option>
-                {requestContents.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className={`${selectArrowClass} pt-2`}>
-            <label className={labelClass}>作業内容</label>
-            <select name="作業内容" value={formData.作業内容} onChange={handleInputChange} required className={inputBaseClass}>
-              <option value="">選択してください</option>
-              {workContents.map(w => <option key={w} value={w}>{w}</option>)}
-            </select>
-          </div>
-
-          <div className="pt-2 border-t border-gray-100">
-            <label className={labelClass}>作業内容（具体的に自由入力）</label>
-            <textarea name="作業内容自由入力" value={formData.社内用メモ} rows={3} className={`${inputBaseClass} resize-none`} placeholder="追加の作業詳細を入力ください。" />
-          </div>
-        </div>
-
-        {/* 3. 金額 セクション (image_3.png基準) */}
-        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 space-y-3.5">
-          <div className="flex justify-between items-center mb-1 pb-2 border-b border-gray-100">
-            <h2 className="text-sm font-bold text-[#eaaa43] flex items-center gap-1.5">
-              <span className="text-base">💰</span> 金額情報
-            </h2>
-            <div className="text-xs font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">03</div>
-          </div>
-          
-          <div className={selectArrowClass}>
-            <label className={labelClass}>作業区分</label>
-            {/* 修理、販売 */}
-            <select name="作業区分（修理or販売)" value={formData["作業区分（修理or販売)"]} onChange={handleInputChange} required className={inputBaseClass}>
-              <option value="">(選択)</option><option value="修理">修理</option><option value="販売">販売</option>
-            </select>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-1">
-              <label className={labelClass}>技術料</label>
-              <input type="number" name="技術料" value={formData.技術料} onChange={handleInputChange} required className={inputBaseClass} />
-            </div>
-            <div className="col-span-1">
-              <label className={labelClass}>修理金額</label>
-              <input type="number" name="修理金額" value={formData.修理金額} onChange={handleInputChange} required className={inputBaseClass} />
-            </div>
-            {/* 販売金額（赤字） */}
-            <div className="col-span-1">
-              <label className={`${labelClass} text-red-500`}>販売金額</label>
-              <input type="number" name="販売金額" value={formData.販売金額} onChange={handleInputChange} required className={`${inputBaseClass} bg-red-50 text-red-500 border-red-100 focus:border-red-500`} />
-            </div>
-          </div>
-        </div>
-
-        {/* 4. 提案 セクション (image_3.png基準) */}
-        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 space-y-3.5">
-          <div className="flex justify-between items-center mb-1 pb-2 border-b border-gray-100">
-            <h2 className="text-sm font-bold text-[#eaaa43] flex items-center gap-1.5">
-              <span className="text-base">💡</span> 提案・利用
-            </h2>
-            <div className="text-xs font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">04</div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className={selectArrowClass}>
-              <label className={labelClass}>提案有無</label>
-              {/* 無、有 */}
-              <select name="提案有無" value={formData.提案有無} onChange={handleInputChange} required className={inputBaseClass}>
-                <option value="無">無</option><option value="有">有</option>
-              </select>
-            </div>
-            {/* ★元のオレンジ枠select仕様を Disabled UI再現のために忠実に継承 */}
-            {formData.提案有無 === '有' && (
-              <div className={selectArrowClass}>
-                <label className={`${labelClass} text-[#eaaa43]`}>提案内容（有の場合）</label>
-                {/* 提案内容一覧 selectギミック。初期状態で「選択してください」と表示 */}
-                <select name="提案内容" value={formData.提案内容} onChange={handleInputChange} required className={`${inputBaseClass} bg-orange-50 border-orange-100 text-[#eaaa43] focus:border-[#eaaa43]`}>
-                  <option value="">(選択してください)</option>
-                  {proposalContents.map(p => <option key={p} value={p}>{p}</option>)}
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>日付</label>
+                <input type="date" name="日付" value={formData.日付} onChange={handleChange} required className={inputBaseClass} />
+              </div>
+              <div className={selectWrapperClass}>
+                <label className={labelClass}>担当者</label>
+                <select name="担当者" value={formData.担当者} onChange={handleChange} required className={inputBaseClass}>
+                  <option value="">(選択)</option>
+                  {assignees.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>開始時間</label>
+                <input type="time" name="開始時間" value={formData.開始時間} onChange={handleStartTimeChange} required className={inputBaseClass} />
+              </div>
+              <div>
+                <label className={labelClass}>終了時間</label>
+                <input type="time" name="終了時間" value={formData.終了時間} onChange={handleChange} required className={inputBaseClass} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 02 業務詳細 */}
+        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-6">
+          <div className="flex justify-between items-end mb-4 border-b border-gray-100 pb-2">
+            <h2 className="text-[1.1rem] font-bold text-[#eaaa43] tracking-wider">業務詳細</h2>
+            <span className="text-gray-300 font-black text-xl leading-none">02</span>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>訪問先名 / 英語</label>
+                <input type="text" name="訪問先" value={formData.訪問先} onChange={handleChange} placeholder="入力して下さい。" required className={inputBaseClass} />
+              </div>
+              <div className={selectWrapperClass}>
+                <label className={labelClass}>クライアント / 英語</label>
+                <select name="クライアント" value={formData.クライアント} onChange={handleChange} className={inputBaseClass}>
+                  <option value="">(←ー) デフォルト</option>
+                  {clients.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className={selectWrapperClass}>
+                <label className={labelClass}>エリア / 英語</label>
+                <select name="エリア" value={formData.エリア} onChange={handleChange} required className={inputBaseClass}>
+                  <option value="">(選択)</option>
+                  {areas.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+              <div className={selectWrapperClass}>
+                <label className={labelClass}>品目 / 英語</label>
+                <select name="品目" value={formData.品目} onChange={handleChange} required className={inputBaseClass}>
+                  <option value="">(選択)</option>
+                  {items.map(i => <option key={i} value={i}>{i}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className={selectWrapperClass}>
+                <label className={labelClass}>依頼内容 / 英語</label>
+                <select name="依頼内容" value={formData.依頼内容} onChange={handleChange} required className={inputBaseClass}>
+                  <option value="">(選択)</option>
+                  {requestContents.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div className={selectWrapperClass}>
+                <label className={labelClass}>作業内容 / 英語</label>
+                <select name="作業内容" value={formData.作業内容} onChange={handleChange} required className={inputBaseClass}>
+                  <option value="">(選択)</option>
+                  {workContents.map(w => <option key={w} value={w}>{w}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 03 金額 */}
+        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-6">
+          <div className="flex justify-between items-end mb-4 border-b border-gray-100 pb-2">
+            <h2 className="text-[1.1rem] font-bold text-[#eaaa43] tracking-wider">金額</h2>
+            <span className="text-gray-300 font-black text-xl leading-none">03</span>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className={labelClass}>作業区分</label>
+              <div className="flex bg-gray-100 p-1 rounded-xl">
+                <button type="button" onClick={() => handleToggle('作業区分', '修理')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${formData.作業区分 === '修理' ? 'bg-white text-[#547b97] shadow-sm' : 'text-gray-400'}`}>修理</button>
+                <button type="button" onClick={() => handleToggle('作業区分', '販売')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${formData.作業区分 === '販売' ? 'bg-white text-[#d98c77] shadow-sm' : 'text-gray-400'}`}>販売</button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>技術料</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">¥</span>
+                  <input type="number" name="技術料" value={formData.技術料} onChange={handleChange} required className={`${inputBaseClass} pl-8`} />
+                </div>
+              </div>
+              
+              {formData.作業区分 === '修理' ? (
+                <div>
+                  <label className={`${labelClass} text-[#547b97]`}>修理金額</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#547b97] font-bold">¥</span>
+                    <input type="number" name="修理金額" value={formData.修理金額} onChange={handleChange} required className={`${inputBaseClass} pl-8 border-[#547b97]/30 text-[#547b97] bg-[#547b97]/5`} />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className={`${labelClass} text-[#d98c77]`}>販売金額</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#d98c77] font-bold">¥</span>
+                    <input type="number" name="販売金額" value={formData.販売金額} onChange={handleChange} required className={`${inputBaseClass} pl-8 border-[#d98c77]/30 text-[#d98c77] bg-[#d98c77]/5`} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 04 提案 */}
+        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-6">
+          <div className="flex justify-between items-end mb-4 border-b border-gray-100 pb-2">
+            <h2 className="text-[1.1rem] font-bold text-[#eaaa43] tracking-wider">提案</h2>
+            <span className="text-gray-300 font-black text-xl leading-none">04</span>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>提案有無</label>
+                <div className="flex bg-gray-100 p-1 rounded-xl">
+                  <button type="button" onClick={() => { handleToggle('提案有無', '無'); setFormData(p => ({...p, 提案内容: '', 提案内容詳細: ''})) }} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${formData.提案有無 === '無' ? 'bg-white text-gray-700 shadow-sm' : 'text-gray-400'}`}>無</button>
+                  <button type="button" onClick={() => handleToggle('提案有無', '有')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${formData.提案有無 === '有' ? 'bg-white text-[#eaaa43] shadow-sm' : 'text-gray-400'}`}>有</button>
+                </div>
+              </div>
+
+              {formData.提案有無 === '有' && (
+                <div className={selectWrapperClass}>
+                  <label className={labelClass}>提案内容</label>
+                  <select name="提案内容" value={formData.提案内容} onChange={handleChange} required className={inputBaseClass}>
+                    <option value="">選択してください</option>
+                    {proposalContents.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {formData.提案有無 === '有' && formData.提案内容 === 'その他' && (
+              <div>
+                <label className={labelClass}>提案内容（詳細）</label>
+                <input type="text" name="提案内容詳細" value={formData.提案内容詳細} onChange={handleChange} placeholder="具体的な提案内容を入力" required className={inputBaseClass} />
+              </div>
             )}
           </div>
-          {/* その他選択時の自由入力ギミック */}
-          {formData.提案有無 === '有' && formData.提案内容 === 'その他' && (
-              <div className="pt-2">
-                <label className={labelClass}>提案内容（具体的に）</label>
-                <input type="text" name="提案内容自由入力" value={formData.提案内容自由入力} onChange={handleInputChange} placeholder="その他提案内容を入力" required className={inputBaseClass} />
-              </div>
-          )}
+        </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
-            <div className={selectArrowClass}>
-              <label className={labelClass}>遠隔高速利用</label>
-              {/* 無、有 */}
-              <select name="遠隔高速利用" value={formData.遠隔高速利用} onChange={handleInputChange} required className={inputBaseClass}>
-                <option value="無">無</option><option value="有">有</option>
-              </select>
+        {/* 05 ステータス */}
+        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-6">
+          <div className="flex justify-between items-end mb-4 border-b border-gray-100 pb-2">
+            <h2 className="text-[1.1rem] font-bold text-[#eaaa43] tracking-wider">ステータス</h2>
+            <span className="text-gray-300 font-black text-xl leading-none">05</span>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className={selectWrapperClass}>
+                <label className={labelClass}>状況</label>
+                <select name="状況" value={formData.状況} onChange={handleChange} required className={inputBaseClass}>
+                  {statuses.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              
+              <div>
+                <label className={labelClass}>遠隔・高速利用</label>
+                <div className="flex bg-gray-100 p-1 rounded-xl">
+                  <button type="button" onClick={() => { handleToggle('遠隔高速利用', '無'); setFormData(p => ({...p, 伝票番号: ''})) }} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${formData.遠隔高速利用 === '無' ? 'bg-white text-gray-700 shadow-sm' : 'text-gray-400'}`}>無</button>
+                  <button type="button" onClick={() => handleToggle('遠隔高速利用', '有')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${formData.遠隔高速利用 === '有' ? 'bg-white text-blue-500 shadow-sm' : 'text-gray-400'}`}>有</button>
+                </div>
+              </div>
             </div>
+
             {formData.遠隔高速利用 === '有' && (
               <div>
-                <label className={labelClass}>伝票番号（有の場合）</label>
-                {/* ★指示されたプレースホルダー「伝票番号を入力してください」をオレンジ枠inputに実装ギミック */}
-                <input type="text" name="伝票番号" value={formData.伝票番号} onChange={handleInputChange} placeholder="伝票番号を入力してください" required className={inputBaseClass} />
+                <label className={labelClass}>伝票番号</label>
+                <input type="text" name="伝票番号" value={formData.伝票番号} onChange={handleChange} placeholder="伝票番号を入力してください" required className={inputBaseClass} />
               </div>
             )}
+
+            <div>
+              <label className={labelClass}>メモ</label>
+              <textarea name="メモ" value={formData.メモ} onChange={handleChange} rows={3} className={`${inputBaseClass} resize-none`} placeholder="特記事項があれば入力してください"></textarea>
+            </div>
           </div>
         </div>
 
-        {/* 5. ステータス セクション (image_3.png基準) */}
-        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 space-y-3.5">
-          <div className="flex justify-between items-center mb-1 pb-2 border-b border-gray-100">
-            <h2 className="text-sm font-bold text-[#eaaa43] flex items-center gap-1.5">
-              <span className="text-base">📢</span> ステータス
-            </h2>
-            <div className="text-xs font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">05</div>
-          </div>
-
-          <div className={selectArrowClass}>
-            <label className={labelClass}>状況</label>
-            {/* ★状況一覧 select プルダウン選択ギミック */}
-            <select name="ステータス" value={formData.ステータス} onChange={handleInputChange} required className={inputBaseClass}>
-              {/* 初期値：完了 */}
-              {statuses.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-
-          {/* ★社内用メモ：メモ textarea */}
-          <div className="pt-2 border-t border-gray-100">
-            <label className={labelClass}>社内用メモ</label>
-            <textarea name="社内用メモ" value={formData.社内用メモ} onChange={handleInputChange} placeholder="追加情報あれば入力ください。" rows={3} className={`${inputBaseClass} resize-none`} />
-          </div>
-        </div>
-
-        {/* 提出ボタン (画面最下部のオレンジ色ボタン) */}
-        {/* 内容確認する →スプレッドシートに入力内容を飛ばす。送信の前には確認画面(入力した一覧を表示) */}
-        <button type="submit" disabled={isLoading} className="w-full bg-[#eaaa43] text-white rounded-[14px] py-4 shadow-sm active:scale-95 transition-all font-black text-base mt-4 mb-2 tracking-widest disabled:bg-gray-300">
-          {isLoading ? '送信中...' : '日報を提出する'}
+        {/* 提出ボタン */}
+        <button type="submit" className="w-full bg-[#eaaa43] text-white rounded-[14px] py-4 shadow-sm active:scale-95 transition-transform font-black text-base mt-2 tracking-widest">
+          内容確認する
         </button>
 
       </form>
 
-      {/* 下部ナビゲーションバー（固定） */}
-      <div className="fixed bottom-0 left-0 right-0 h-20 bg-white border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.02)] flex items-center justify-around px-6 z-50">
-        <Link href="/" className="flex flex-col items-center gap-1.5 text-gray-400">
-          <span className="text-2xl">🏠</span><span className="text-[10px] font-bold">ホーム</span>
-        </Link>
-        <div className="flex flex-col items-center gap-1.5 text-gray-400">
-          <span className="text-2xl">🔔</span><span className="text-[10px] font-bold">お知らせ</span>
-        </div>
-        <div className="flex flex-col items-center gap-1.5 text-gray-400">
-          <span className="text-2xl">👤</span><span className="text-[10px] font-bold">マイページ</span>
-        </div>
-        <div className="flex flex-col items-center gap-1.5 text-gray-400">
-          <span className="text-2xl">⚙️</span><span className="text-[10px] font-bold">設定</span>
-        </div>
-      </div>
-
-      {/* =========================================
-          ★【送信前確認モーダル】ギミック実装 ★
-          Disabled UI パーツを忠実に再現する
-      ========================================= */}
-      {showConfirmModal && (
-        <div className="fixed inset-0 bg- crème色（#f8f6f0）/80 z-[100] p-6 flex items-center justify-center animate-fade-in text-slate-800">
-          {/* 白背景カード、角丸 rounded-[20px] 、薄いシャドウ shadow-[0_2px_10px_rgba(0,0,0,0.03)] を継承 */}
-          <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-6 space-y-5 w-full max-w-sm max-h-[90vh] overflow-y-auto">
+      {/* 確認モーダル */}
+      {showConfirm && (
+        <div className="fixed inset-0 bg-black/40 z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#f8f6f0] rounded-[20px] w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl flex flex-col">
+            <div className="sticky top-0 bg-[#eaaa43] text-white py-4 text-center font-bold tracking-widest z-10">
+              入力内容の確認
+            </div>
             
-            <h2 className="text-sm font-bold text-[#eaaa43] flex items-center gap-1.5 pb-2 border-b border-gray-100 mb-1">
-              <span className="text-base">📋</span> 入力内容のご確認
-            </h2>
-
-            {/* 各項目を、元のUIパーツ（Disabled）をそのまま使用して忠実に再現するギミック */}
-            <div className="space-y-3">
-              
-              {/* 基本情報 セクション */}
-              <div className="flex items-center gap-2">
-                <label className={confirmLabelClass}>担当者名</label>
-                <div className={`${selectArrowClass} ${disabledBaseClass}`}>
-                  <select name="担当者名" value={formData.担当者名} className={disabledBaseClass}>
-                    {workers.map(w => <option key={w} value={w}>{w}</option>)}
-                  </select>
-                </div>
+            <div className="p-6 space-y-4 text-sm font-medium">
+              <div className="grid grid-cols-3 border-b border-gray-200 pb-2">
+                <span className="text-gray-500 text-xs">日付/時間</span>
+                <span className="col-span-2 text-right">{formData.日付} ({formData.開始時間}〜{formData.終了時間})</span>
               </div>
-
-              <div className="flex items-center gap-2 pt-1.5 border-t border-gray-100">
-                <label className={confirmLabelClass}>日付</label>
-                <input type="date" name="日付" value={formData.日付} className={disabledBaseClass} />
+              <div className="grid grid-cols-3 border-b border-gray-200 pb-2">
+                <span className="text-gray-500 text-xs">担当者</span>
+                <span className="col-span-2 text-right">{formData.担当者}</span>
               </div>
-
-              <div className="flex items-center gap-2">
-                <label className={confirmLabelClass}>時間</label>
-                <div className="flex-1 flex items-center gap-1">
-                  <input type="time" name="開始時間" value={formData.開始時間} className={disabledBaseClass} />
-                  <span>〜</span>
-                  <input type="time" name="終了時間" value={formData.終了時間} className={disabledBaseClass} />
-                </div>
+              <div className="grid grid-cols-3 border-b border-gray-200 pb-2">
+                <span className="text-gray-500 text-xs">訪問先</span>
+                <span className="col-span-2 text-right">{formData.訪問先}</span>
               </div>
-
-              {/* 業務詳細 セクション */}
-              <div className="flex items-center gap-2 pt-1.5 border-t border-gray-100">
-                <label className={confirmLabelClass}>訪問先名</label>
-                <input type="text" name="訪問先名（クライアント名）" value={formData["訪問先名（クライアント名）"]} className={disabledBaseClass} />
+              <div className="grid grid-cols-3 border-b border-gray-200 pb-2">
+                <span className="text-gray-500 text-xs">エリア</span>
+                <span className="col-span-2 text-right">{formData.エリア}</span>
               </div>
-
-              <div className="flex items-center gap-2">
-                <label className={confirmLabelClass}>エリア</label>
-                <div className={`${selectArrowClass} ${disabledBaseClass}`}>
-                  <select name="エリア" value={formData.エリア} className={disabledBaseClass}>
-                    <option value="">選択してください</option>
-                    {areas.map(a => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                </div>
+              <div className="grid grid-cols-3 border-b border-gray-200 pb-2">
+                <span className="text-gray-500 text-xs">クライアント</span>
+                <span className="col-span-2 text-right">{formData.クライアント || 'デフォルト'}</span>
               </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex items-center gap-2">
-                  <label className={confirmLabelClass}>品目</label>
-                  <div className={`${selectArrowClass} ${disabledBaseClass}`}>
-                    <select name="品目" value={formData.品目} className={disabledBaseClass}>
-                      <option value="">選択してください</option>
-                      {items.map(i => <option key={i} value={i}>{i}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className={confirmLabelClass}>依頼内容</label>
-                  <div className={`${selectArrowClass} ${disabledBaseClass}`}>
-                    <select name="依頼内容" value={formData.依頼内容} className={disabledBaseClass}>
-                      <option value="">選択してください</option>
-                      {requestContents.map(r => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </div>
-                </div>
+              <div className="grid grid-cols-3 border-b border-gray-200 pb-2">
+                <span className="text-gray-500 text-xs">作業概要</span>
+                <span className="col-span-2 text-right">{formData.品目} / {formData.依頼内容} / {formData.作業内容}</span>
               </div>
-
-              <div className="flex items-center gap-2 pt-1.5 border-t border-gray-100">
-                <label className={confirmLabelClass}>作業内容</label>
-                <div className={`${selectArrowClass} ${disabledBaseClass}`}>
-                  <select name="作業内容" value={formData.作業内容} className={disabledBaseClass}>
-                    <option value="">選択してください</option>
-                    {workContents.map(w => <option key={w} value={w}>{w}</option>)}
-                  </select>
-                </div>
+              <div className="grid grid-cols-3 border-b border-gray-200 pb-2">
+                <span className="text-gray-500 text-xs">金額 ({formData.作業区分})</span>
+                <span className="col-span-2 text-right">
+                  技術: ¥{formData.技術料} <br/>
+                  {formData.作業区分 === '修理' ? `修理: ¥${formData.修理金額}` : `販売: ¥${formData.販売金額}`}
+                </span>
               </div>
-
-              {/* 区分、金額セクション */}
-              <div className="flex items-center gap-2 pt-1.5 border-t border-gray-100">
-                <label className={`${confirmLabelClass} ${formData["作業区分（修理or販売)"] === '修理' ? 'text-[#eaaa43]' : 'text-red-300'}`}>作業区分</label>
-                <div className={confirmValClass}>{formData["作業区分（修理or販売)"]}</div>
+              <div className="grid grid-cols-3 border-b border-gray-200 pb-2">
+                <span className="text-gray-500 text-xs">提案</span>
+                <span className="col-span-2 text-right">{formData.提案有無} {formData.提案内容 && `(${formData.提案内容 === 'その他' ? formData.提案内容詳細 : formData.提案内容})`}</span>
               </div>
-
-              <div className="flex gap-2">
-                <label className={confirmLabelClass}>金額詳細</label>
-                <div className="flex-1 space-y-1 text-sm font-medium">
-                  <div>技術料: ¥{Number(formData.技術料).toLocaleString()}</div>
-                  {formData["作業区分（修理or販売)"] === '修理' ? (
-                    <div>修理金額: ¥{Number(formData.修理金額).toLocaleString()}</div>
-                  ) : (
-                    <div className="text-red-500 font-bold">販売金額: ¥{Number(formData.販売金額).toLocaleString()}</div>
-                  )}
-                </div>
+              <div className="grid grid-cols-3 border-b border-gray-200 pb-2">
+                <span className="text-gray-500 text-xs">ステータス等</span>
+                <span className="col-span-2 text-right">{formData.状況} {formData.遠隔高速利用 === '有' ? `(高速有: ${formData.伝票番号})` : ''}</span>
               </div>
-
-              {/* 提案、高速セクション */}
-              <div className="flex items-center gap-2 pt-1.5 border-t border-gray-100">
-                <label className={`${confirmLabelClass} ${formData.提案有無 === '有' ? 'text-[#eaaa43]' : 'text-gray-400'}`}>提案</label>
-                <div className={confirmValClass}>{formData.提案有無}</div>
-              </div>
-
-              {formData.提案有無 === '有' && (
-                <div className="flex items-center gap-2">
-                  <label className={`${confirmLabelClass} text-[#eaaa43]`}>提案内容</label>
-                  {/* 元の Disabled UIオレンジ枠、▼、を忠実に再現します */}
-                  <div className={`${selectArrowClass} ${disabledBaseClass}`}>
-                    <select name="提案内容" value={formData.提案内容} className={`${disabledBaseClass} border-orange-100 text-[#eaaa43]`}>
-                        <option value="">(選択してください)</option>
-                        {proposalContents.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </div>
+              {formData.メモ && (
+                <div className="pt-2">
+                  <span className="text-gray-500 text-xs block mb-1">メモ</span>
+                  <p className="bg-white p-3 rounded-lg border border-gray-200 text-xs whitespace-pre-wrap">{formData.メモ}</p>
                 </div>
               )}
-              {formData.提案有無 === '有' && formData.提案内容 === 'その他' && (
-                  <div className="flex items-center gap-2">
-                    <label className={`${confirmLabelClass} text-[#eaaa43]`}>自由入力</label>
-                    <input type="text" name="提案内容自由入力" value={formData.提案内容自由入力} className={`${disabledBaseClass} border-orange-100 text-[#eaaa43]`} />
-                  </div>
-              )}
-
-              <div className="flex items-center gap-2 pt-1.5 border-t border-gray-100">
-                <label className={`${confirmLabelClass} ${formData.遠隔高速利用 === '有' ? 'text-[#eaaa43]' : 'text-gray-400'}`}>遠隔高速</label>
-                <div className={confirmValClass}>{formData.遠隔高速利用}</div>
-              </div>
-              {formData.遠隔高速利用 === '有' && (
-                  <div className="flex items-center gap-2">
-                    <label className={confirmLabelClass}>伝票番号</label>
-                    <input type="text" name="伝票番号" value={formData.伝票番号} className={disabledBaseClass} />
-                  </div>
-              )}
-
-              {/* ステータス、メモセクション */}
-              <div className="flex items-center gap-2 pt-1.5 border-t border-gray-100">
-                <label className={confirmLabelClass}>ステータス</label>
-                <div className={`${selectArrowClass} ${disabledBaseClass}`}>
-                  <select name="ステータス" value={formData.ステータス} className={disabledBaseClass}>
-                    {statuses.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <label className={labelClass}>社内用メモ（確認）</label>
-                <textarea name="社内用メモ" value={formData.社内用メモ} rows={3} className={`${disabledBaseClass} resize-none`} />
-              </div>
-
             </div>
 
-            {/* モーダル下のボタンギミック */}
-            <div className="flex gap-4 pt-4 border-t border-gray-100 mt-2">
-              <button type="button" onClick={() => setShowConfirmModal(false)} className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 font-bold text-sm active:scale-95 transition-all">
+            <div className="p-6 pt-2 flex gap-3 sticky bottom-0 bg-[#f8f6f0]">
+              <button type="button" onClick={() => setShowConfirm(false)} className="flex-1 bg-white border border-gray-300 text-gray-700 py-3 rounded-xl font-bold active:scale-95 transition-transform">
                 修正する
               </button>
-              {/* "送信する"ボタンで送信。 */}
-              <button type="button" onClick={handleSubmit} className="flex-1 bg-[#eaaa43] text-white rounded-xl py-3 font-bold text-sm shadow active:scale-95 transition-all tracking-wider">
-                提出する
+              <button type="button" onClick={handleSubmit} disabled={isSubmitting} className="flex-1 bg-[#eaaa43] text-white py-3 rounded-xl font-bold tracking-widest active:scale-95 transition-transform disabled:bg-gray-400">
+                {isSubmitting ? '送信中...' : '送信する'}
               </button>
             </div>
-
           </div>
         </div>
       )}
 
+      {/* 画面下のタブバー */}
+      <div className="fixed bottom-0 left-0 right-0 w-full bg-white rounded-t-[30px] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] h-[70px] flex justify-around items-center px-4 max-w-md mx-auto pb-2 z-40">
+        <Link href="/" className="p-2 cursor-pointer relative">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </Link>
+        <div className="p-2 cursor-pointer relative">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        </div>
+        <div className="p-2 cursor-pointer relative">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#eaaa43" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span className="absolute top-1 right-1 w-2 h-2 bg-[#eaaa43] rounded-full border-2 border-white"></span>
+        </div>
+        <div className="p-2 cursor-pointer relative">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </div>
+      </div>
     </div>
   );
 }
