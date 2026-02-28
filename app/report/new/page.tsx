@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
@@ -17,9 +17,9 @@ const workContents = ["部品交換", "製品交換、取付", "清掃", "点検
 const proposalContents = ["サティス", "プレアス", "アメージュ", "パッソ", "KA", "KB", "水栓", "その他"];
 const statuses = ["完了", "再訪予定", "部品手配", "見積", "保留"];
 
-export default function NewReport() {
+// --- フォームの中身（Suspenseで囲むコンポーネント） ---
+function ReportForm() {
   const searchParams = useSearchParams();
-  // A-0から引き継いだ担当者を初期値に設定
   const defaultWorker = searchParams.get('worker') || ""; 
 
   const [formData, setFormData] = useState({
@@ -39,7 +39,7 @@ export default function NewReport() {
     販売金額: '0',
     提案有無: '無',
     提案内容: '',
-    提案内容詳細: '', // 「その他」用
+    提案内容詳細: '',
     遠隔高速利用: '無',
     伝票番号: '',
     状況: '完了',
@@ -50,7 +50,6 @@ export default function NewReport() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
 
-  // 時間入力時の自動計算ロジック（開始時間 + 30分 = 終了時間の初期値）
   const handleStartTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const startTime = e.target.value;
     let endTime = formData.終了時間;
@@ -66,7 +65,6 @@ export default function NewReport() {
       }
       endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
     }
-
     setFormData({ ...formData, 開始時間: startTime, 終了時間: endTime });
   };
 
@@ -88,12 +86,9 @@ export default function NewReport() {
     setIsSubmitting(true);
     setSubmitMessage("");
 
-    // 修理と販売の金額を明確に分けるロジック
     const techFee = Number(formData.技術料) || 0;
     const repairAmt = formData.作業区分 === '修理' ? (Number(formData.修理金額) || 0) : 0;
     const salesAmt = formData.作業区分 === '販売' ? (Number(formData.販売金額) || 0) : 0;
-    
-    // 提案内容の結合
     const finalProposal = formData.提案内容 === 'その他' ? formData.提案内容詳細 : formData.提案内容;
 
     const payload = {
@@ -130,7 +125,6 @@ export default function NewReport() {
       setSubmitMessage("送信しました。お疲れ様でした");
       setShowConfirm(false);
       
-      // フォームリセット (一部保持)
       setFormData({
         ...formData,
         開始時間: '',
@@ -160,15 +154,12 @@ export default function NewReport() {
     }
   };
 
-  // 共通のスタイルクラス
   const inputBaseClass = "w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:border-[#eaaa43] focus:ring-1 focus:ring-[#eaaa43] transition-all appearance-none";
   const labelClass = "block text-xs font-bold text-gray-600 mb-1.5 ml-1";
   const selectWrapperClass = "relative after:content-['▼'] after:text-gray-400 after:text-[10px] after:absolute after:right-4 after:top-1/2 after:-translate-y-1/2 after:pointer-events-none";
 
   return (
-    <div className="min-h-screen bg-[#f8f6f0] flex flex-col items-center font-sans pb-32 relative text-slate-800">
-      
-      {/* 画面上部エリア */}
+    <div className="flex flex-col items-center w-full">
       <div className="w-[92%] max-w-md mt-6 mb-6">
         <div className="bg-[#eaaa43] rounded-[14px] py-4 px-4 shadow-sm flex items-center justify-between">
           <Link href="/" className="text-white font-bold flex items-center w-16 active:scale-90 transition-transform">
@@ -177,7 +168,7 @@ export default function NewReport() {
           </Link>
           <h1 className="text-white font-bold tracking-widest text-lg flex-1 text-center">新規入力</h1>
           <div className="w-16 flex justify-end">
-            <div className="bg-white/20 px-3 py-1 rounded-full border border-white/30 text-white text-xs font-bold shadow-inner">
+            <div className="bg-white/20 px-3 py-1 rounded-full border border-white/30 text-white text-xs font-bold shadow-inner whitespace-nowrap">
               {formData.担当者 || "未選択"}
             </div>
           </div>
@@ -191,14 +182,12 @@ export default function NewReport() {
       )}
 
       <form onSubmit={handleOpenConfirm} className="w-[92%] max-w-md flex flex-col gap-5">
-        
         {/* 01 基本情報 */}
         <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-6">
           <div className="flex justify-between items-end mb-4 border-b border-gray-100 pb-2">
             <h2 className="text-[1.1rem] font-bold text-[#eaaa43] tracking-wider">基本情報</h2>
             <span className="text-gray-300 font-black text-xl leading-none">01</span>
           </div>
-          
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -232,49 +221,46 @@ export default function NewReport() {
             <h2 className="text-[1.1rem] font-bold text-[#eaaa43] tracking-wider">業務詳細</h2>
             <span className="text-gray-300 font-black text-xl leading-none">02</span>
           </div>
-
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelClass}>訪問先名 / 英語</label>
+                <label className={labelClass}>訪問先名</label>
                 <input type="text" name="訪問先" value={formData.訪問先} onChange={handleChange} placeholder="入力して下さい。" required className={inputBaseClass} />
               </div>
               <div className={selectWrapperClass}>
-                <label className={labelClass}>クライアント / 英語</label>
+                <label className={labelClass}>クライアント</label>
                 <select name="クライアント" value={formData.クライアント} onChange={handleChange} className={inputBaseClass}>
                   <option value="">(←ー) デフォルト</option>
                   {clients.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div className={selectWrapperClass}>
-                <label className={labelClass}>エリア / 英語</label>
+                <label className={labelClass}>エリア</label>
                 <select name="エリア" value={formData.エリア} onChange={handleChange} required className={inputBaseClass}>
                   <option value="">(選択)</option>
                   {areas.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
               <div className={selectWrapperClass}>
-                <label className={labelClass}>品目 / 英語</label>
+                <label className={labelClass}>品目</label>
                 <select name="品目" value={formData.品目} onChange={handleChange} required className={inputBaseClass}>
                   <option value="">(選択)</option>
                   {items.map(i => <option key={i} value={i}>{i}</option>)}
                 </select>
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div className={selectWrapperClass}>
-                <label className={labelClass}>依頼内容 / 英語</label>
+                <label className={labelClass}>依頼内容</label>
                 <select name="依頼内容" value={formData.依頼内容} onChange={handleChange} required className={inputBaseClass}>
                   <option value="">(選択)</option>
                   {requestContents.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div className={selectWrapperClass}>
-                <label className={labelClass}>作業内容 / 英語</label>
+                <label className={labelClass}>作業内容</label>
                 <select name="作業内容" value={formData.作業内容} onChange={handleChange} required className={inputBaseClass}>
                   <option value="">(選択)</option>
                   {workContents.map(w => <option key={w} value={w}>{w}</option>)}
@@ -290,7 +276,6 @@ export default function NewReport() {
             <h2 className="text-[1.1rem] font-bold text-[#eaaa43] tracking-wider">金額</h2>
             <span className="text-gray-300 font-black text-xl leading-none">03</span>
           </div>
-
           <div className="space-y-4">
             <div>
               <label className={labelClass}>作業区分</label>
@@ -299,7 +284,6 @@ export default function NewReport() {
                 <button type="button" onClick={() => handleToggle('作業区分', '販売')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${formData.作業区分 === '販売' ? 'bg-white text-[#d98c77] shadow-sm' : 'text-gray-400'}`}>販売</button>
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelClass}>技術料</label>
@@ -308,7 +292,6 @@ export default function NewReport() {
                   <input type="number" name="技術料" value={formData.技術料} onChange={handleChange} required className={`${inputBaseClass} pl-8`} />
                 </div>
               </div>
-              
               {formData.作業区分 === '修理' ? (
                 <div>
                   <label className={`${labelClass} text-[#547b97]`}>修理金額</label>
@@ -336,7 +319,6 @@ export default function NewReport() {
             <h2 className="text-[1.1rem] font-bold text-[#eaaa43] tracking-wider">提案</h2>
             <span className="text-gray-300 font-black text-xl leading-none">04</span>
           </div>
-
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -346,7 +328,6 @@ export default function NewReport() {
                   <button type="button" onClick={() => handleToggle('提案有無', '有')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${formData.提案有無 === '有' ? 'bg-white text-[#eaaa43] shadow-sm' : 'text-gray-400'}`}>有</button>
                 </div>
               </div>
-
               {formData.提案有無 === '有' && (
                 <div className={selectWrapperClass}>
                   <label className={labelClass}>提案内容</label>
@@ -357,7 +338,6 @@ export default function NewReport() {
                 </div>
               )}
             </div>
-
             {formData.提案有無 === '有' && formData.提案内容 === 'その他' && (
               <div>
                 <label className={labelClass}>提案内容（詳細）</label>
@@ -373,7 +353,6 @@ export default function NewReport() {
             <h2 className="text-[1.1rem] font-bold text-[#eaaa43] tracking-wider">ステータス</h2>
             <span className="text-gray-300 font-black text-xl leading-none">05</span>
           </div>
-
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className={selectWrapperClass}>
@@ -382,7 +361,6 @@ export default function NewReport() {
                   {statuses.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-              
               <div>
                 <label className={labelClass}>遠隔・高速利用</label>
                 <div className="flex bg-gray-100 p-1 rounded-xl">
@@ -391,14 +369,12 @@ export default function NewReport() {
                 </div>
               </div>
             </div>
-
             {formData.遠隔高速利用 === '有' && (
               <div>
                 <label className={labelClass}>伝票番号</label>
                 <input type="text" name="伝票番号" value={formData.伝票番号} onChange={handleChange} placeholder="伝票番号を入力してください" required className={inputBaseClass} />
               </div>
             )}
-
             <div>
               <label className={labelClass}>メモ</label>
               <textarea name="メモ" value={formData.メモ} onChange={handleChange} rows={3} className={`${inputBaseClass} resize-none`} placeholder="特記事項があれば入力してください"></textarea>
@@ -410,7 +386,6 @@ export default function NewReport() {
         <button type="submit" className="w-full bg-[#eaaa43] text-white rounded-[14px] py-4 shadow-sm active:scale-95 transition-transform font-black text-base mt-2 tracking-widest">
           内容確認する
         </button>
-
       </form>
 
       {/* 確認モーダル */}
@@ -420,7 +395,6 @@ export default function NewReport() {
             <div className="sticky top-0 bg-[#eaaa43] text-white py-4 text-center font-bold tracking-widest z-10">
               入力内容の確認
             </div>
-            
             <div className="p-6 space-y-4 text-sm font-medium">
               <div className="grid grid-cols-3 border-b border-gray-200 pb-2">
                 <span className="text-gray-500 text-xs">日付/時間</span>
@@ -468,7 +442,6 @@ export default function NewReport() {
                 </div>
               )}
             </div>
-
             <div className="p-6 pt-2 flex gap-3 sticky bottom-0 bg-[#f8f6f0]">
               <button type="button" onClick={() => setShowConfirm(false)} className="flex-1 bg-white border border-gray-300 text-gray-700 py-3 rounded-xl font-bold active:scale-95 transition-transform">
                 修正する
@@ -480,6 +453,17 @@ export default function NewReport() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// --- メインページ（Suspenseでラップしてエクスポート） ---
+export default function NewReportPage() {
+  return (
+    <div className="min-h-screen bg-[#f8f6f0] font-sans text-slate-800 pb-32">
+      <Suspense fallback={<div className="flex justify-center items-center h-screen text-gray-500 font-bold">画面を読み込んでいます...</div>}>
+        <ReportForm />
+      </Suspense>
 
       {/* 画面下のタブバー */}
       <div className="fixed bottom-0 left-0 right-0 w-full bg-white rounded-t-[30px] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] h-[70px] flex justify-around items-center px-4 max-w-md mx-auto pb-2 z-40">
