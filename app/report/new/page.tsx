@@ -17,7 +17,6 @@ const workContents = ["部品交換", "製品交換、取付", "清掃", "点検
 const proposalContents = ["サティス", "プレアス", "アメージュ", "パッソ", "KA", "KB", "水栓", "その他"];
 const statuses = ["完了", "再訪予定", "部品手配", "見積", "保留"];
 
-// 日付を YYYY-MM-DD 形式で取得する関数
 function getTodayString() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -26,7 +25,6 @@ function getTodayString() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// フォームのメインコンポーネント
 function ReportForm() {
   const searchParams = useSearchParams();
   const defaultWorker = searchParams.get('worker') || ""; 
@@ -124,9 +122,9 @@ function ReportForm() {
     };
 
     try {
-      // 修正: 'text/plain' を使用してCORSブロックを回避し確実に送信する
       await fetch(GAS_URL, {
         method: 'POST',
+        mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ params: payload })
       });
@@ -163,7 +161,8 @@ function ReportForm() {
     }
   };
 
-  const inputBaseClass = "w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:border-[#eaaa43] focus:ring-1 focus:ring-[#eaaa43] transition-all appearance-none";
+  // ★修正箇所：text-sm を text-base (16px) に変更し、iOSの強制ズームを防止
+  const inputBaseClass = "w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-base text-gray-800 focus:outline-none focus:border-[#eaaa43] focus:ring-1 focus:ring-[#eaaa43] transition-all appearance-none";
   const labelClass = "block text-xs font-bold text-gray-600 mb-1.5 ml-1";
   const selectWrapperClass = "relative after:content-['▼'] after:text-gray-400 after:text-[10px] after:absolute after:right-4 after:top-1/2 after:-translate-y-1/2 after:pointer-events-none";
 
@@ -171,7 +170,8 @@ function ReportForm() {
     <div className="flex flex-col items-center w-full">
       <div className="w-[92%] max-w-md mt-6 mb-6">
         <div className="bg-[#eaaa43] rounded-[14px] py-4 px-4 shadow-sm flex items-center justify-between">
-          <Link href="/" className="text-white font-bold flex items-center w-16 active:scale-90 transition-transform">
+          {/* ★修正箇所：戻るボタンのリンク先を /report に変更 */}
+          <Link href="/report" className="text-white font-bold flex items-center w-16 active:scale-90 transition-transform">
             <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg>
             <span className="text-sm tracking-wider">戻る</span>
           </Link>
@@ -240,7 +240,6 @@ function ReportForm() {
               <div className={selectWrapperClass}>
                 <label className={labelClass}>クライアント</label>
                 <select name="クライアント" value={formData.クライアント} onChange={handleChange} className={inputBaseClass}>
-                  {/* 修正: 指定通り (-----) に変更 */}
                   <option value="">(-----)</option>
                   {clients.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -478,7 +477,7 @@ export default function NewReportPage() {
 
       {/* 画面下のタブバー */}
       <div className="fixed bottom-0 left-0 right-0 w-full bg-white rounded-t-[30px] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] h-[70px] flex justify-around items-center px-4 max-w-md mx-auto pb-2 z-40">
-        <Link href="/" className="p-2 cursor-pointer relative">
+        <Link href="/report" className="p-2 cursor-pointer relative">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         </Link>
         <div className="p-2 cursor-pointer relative">
