@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 
 export default function ReportMenu() {
+  // ★ 修正箇所1: 日本語の担当者名を直接保持するように変更
   const [assignee, setAssignee] = useState(""); 
   
   // === スワイプ・カルーセルの状態管理 ===
@@ -61,6 +62,9 @@ export default function ReportMenu() {
   const repairPercent = totalRev === 0 ? 0 : Math.round((currentData.repair / totalRev) * 100);
   const salesPercent = totalRev === 0 ? 0 : Math.round((currentData.sales / totalRev) * 100);
 
+  // パラメータ用のクエリ文字列を作成する関数
+  const getQueryString = () => assignee && assignee !== "add" ? `?worker=${assignee}` : "";
+
   return (
     <div className="min-h-screen bg-[#f8f6f0] flex flex-col items-center font-sans pb-32 relative overflow-x-hidden text-slate-800">
       
@@ -77,17 +81,18 @@ export default function ReportMenu() {
 
         <div className="mt-5 flex justify-end">
           <div className="bg-white border border-gray-100 rounded-full px-5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] flex items-center relative w-[160px] z-20">
+            {/* ★ 修正箇所1: プルダウンのvalueを日本語名に統一 */}
             <select 
               value={assignee}
               onChange={(e) => setAssignee(e.target.value)}
               className="bg-transparent font-black text-slate-800 outline-none appearance-none cursor-pointer w-full text-sm z-10 text-center"
             >
               <option value="">担当者選択</option>
-              <option value="sato">佐藤</option>
-              <option value="tanaka">田中</option>
-              <option value="minami">南</option>
-              <option value="nitta">新田</option>
-              <option value="tokushige">德重</option>
+              <option value="佐藤">佐藤</option>
+              <option value="田中">田中</option>
+              <option value="南">南</option>
+              <option value="新田">新田</option>
+              <option value="德重">德重</option>
               <option value="add">＋ 追加 (Add)</option>
             </select>
             <span className="text-[10px] text-gray-400 pointer-events-none absolute right-4 z-0">▼</span>
@@ -96,27 +101,28 @@ export default function ReportMenu() {
       </div>
 
       {/* A-1〜A-4 メニューカード一覧 */}
+      {/* ★ 修正箇所2: すべてのリンクに担当者パラメータ (?worker=〇〇) を付与 */}
       <div className="grid grid-cols-2 gap-4 w-[92%] max-w-md mb-8 z-20 relative">
-        <Link href="/report/new" className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] py-8 flex flex-col items-center justify-center active:scale-95 transition-transform border border-transparent hover:border-orange-100">
+        <Link href={`/report/new${getQueryString()}`} className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] py-8 flex flex-col items-center justify-center active:scale-95 transition-transform border border-transparent hover:border-orange-100">
           <h2 className="text-[1.2rem] font-black text-gray-900 tracking-widest mb-1">新規入力</h2>
           <p className="text-[10px] text-gray-400 font-medium mb-3">A-1</p>
           <div className="w-[50%] max-w-[50px] h-[2px] bg-[#cba358]"></div>
         </Link>
-        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] py-8 flex flex-col items-center justify-center active:scale-95 transition-transform border border-transparent hover:border-orange-100 cursor-pointer">
+        <Link href={`/report/list${getQueryString()}`} className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] py-8 flex flex-col items-center justify-center active:scale-95 transition-transform border border-transparent hover:border-orange-100 cursor-pointer">
           <h2 className="text-[1.2rem] font-black text-gray-900 tracking-widest mb-1">当日一覧</h2>
           <p className="text-[10px] text-gray-400 font-medium mb-3">A-2</p>
           <div className="w-[50%] max-w-[50px] h-[2px] bg-[#cba358]"></div>
-        </div>
-        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] py-8 flex flex-col items-center justify-center active:scale-95 transition-transform border border-transparent hover:border-orange-100 cursor-pointer">
+        </Link>
+        <Link href={`/report/history${getQueryString()}`} className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] py-8 flex flex-col items-center justify-center active:scale-95 transition-transform border border-transparent hover:border-orange-100 cursor-pointer">
           <h2 className="text-[1.2rem] font-black text-gray-900 tracking-widest mb-1">過去履歴</h2>
           <p className="text-[10px] text-gray-400 font-medium mb-3">A-3</p>
           <div className="w-[50%] max-w-[50px] h-[2px] bg-[#cba358]"></div>
-        </div>
-        <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] py-8 flex flex-col items-center justify-center active:scale-95 transition-transform border border-transparent hover:border-orange-100 cursor-pointer">
+        </Link>
+        <Link href={`/report/toll${getQueryString()}`} className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] py-8 flex flex-col items-center justify-center active:scale-95 transition-transform border border-transparent hover:border-orange-100 cursor-pointer">
           <h2 className="text-[1.1rem] font-black text-gray-900 tracking-widest mb-1 leading-tight text-center">高速代<br/>遠隔地</h2>
           <p className="text-[10px] text-gray-400 font-medium mb-3 mt-1">A-4</p>
           <div className="w-[50%] max-w-[50px] h-[2px] bg-[#cba358]"></div>
-        </div>
+        </Link>
       </div>
 
       {/* =========================================
@@ -222,8 +228,9 @@ export default function ReportMenu() {
               <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 h-full flex flex-col justify-center">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-[#eaaa43] font-bold text-sm tracking-widest">集計</h3>
-                  <span className="text-[10px] text-gray-500 font-medium bg-gray-100 px-2 py-1 rounded-full border border-gray-200">
-                    {assignee === "" ? "会社全体" : assignee === "sato" ? "佐藤" : assignee === "tanaka" ? "田中" : assignee === "minami" ? "南" : assignee === "nitta" ? "新田" : assignee === "tokushige" ? "德重" : "会社全体"}
+                  <span className="text-[10px] text-gray-500 font-medium bg-gray-100 px-2 py-1 rounded-full border border-gray-200 whitespace-nowrap">
+                    {/* ★ 修正箇所3: 集計ラベルの表示も日本語名に連動 */}
+                    {assignee === "" || assignee === "add" ? "会社全体" : assignee}
                   </span>
                 </div>
                 <div className="flex gap-2 mb-4 bg-gray-50 p-1 rounded-lg">
@@ -289,7 +296,7 @@ export default function ReportMenu() {
 
       </div>
 
-      {/* 画面下のタブバー（z-indexとpositionを見直して修正完了！） */}
+      {/* 画面下のタブバー */}
       <div className="fixed bottom-0 left-0 right-0 w-full bg-white rounded-t-[30px] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] h-[70px] flex justify-around items-center px-4 max-w-md mx-auto pb-2 z-50">
         <Link href="/" className="p-2 cursor-pointer relative z-50">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
