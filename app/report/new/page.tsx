@@ -17,13 +17,22 @@ const workContents = ["部品交換", "製品交換、取付", "清掃", "点検
 const proposalContents = ["サティス", "プレアス", "アメージュ", "パッソ", "KA", "KB", "水栓", "その他"];
 const statuses = ["完了", "再訪予定", "部品手配", "見積", "保留"];
 
-// --- フォームの中身（Suspenseで囲むコンポーネント） ---
+// 日付を YYYY-MM-DD 形式で取得する関数
+function getTodayString() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// フォームのメインコンポーネント
 function ReportForm() {
   const searchParams = useSearchParams();
   const defaultWorker = searchParams.get('worker') || ""; 
 
   const [formData, setFormData] = useState({
-    日付: new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replaceAll('/', '-'),
+    日付: getTodayString(),
     開始時間: '',
     終了時間: '',
     担当者: defaultWorker,
@@ -115,10 +124,10 @@ function ReportForm() {
     };
 
     try {
+      // 修正: 'text/plain' を使用してCORSブロックを回避し確実に送信する
       await fetch(GAS_URL, {
         method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ params: payload })
       });
 
@@ -182,6 +191,7 @@ function ReportForm() {
       )}
 
       <form onSubmit={handleOpenConfirm} className="w-[92%] max-w-md flex flex-col gap-5">
+        
         {/* 01 基本情報 */}
         <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-6">
           <div className="flex justify-between items-end mb-4 border-b border-gray-100 pb-2">
@@ -230,7 +240,8 @@ function ReportForm() {
               <div className={selectWrapperClass}>
                 <label className={labelClass}>クライアント</label>
                 <select name="クライアント" value={formData.クライアント} onChange={handleChange} className={inputBaseClass}>
-                  <option value="">(←ー) デフォルト</option>
+                  {/* 修正: 指定通り (-----) に変更 */}
+                  <option value="">(-----)</option>
                   {clients.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
