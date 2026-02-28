@@ -7,6 +7,18 @@ import { useSearchParams } from 'next/navigation';
 // GASのURL
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyi3gbullz4u0EqXBkhMVxiqfZq0-PKdhim9QVrSyl1q4SvBaS46GX5lzsyZrAu5j8u2A/exec';
 
+// --- 時間の文字列を綺麗に整形する関数 ---
+const formatTime = (timeStr: string) => {
+  if (!timeStr) return "";
+  if (timeStr.includes("T")) {
+    const d = new Date(timeStr);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    }
+  }
+  return timeStr;
+};
+
 // --- データ取得＆表示コンポーネント ---
 function ReportList() {
   const searchParams = useSearchParams();
@@ -15,18 +27,20 @@ function ReportList() {
   const [data, setData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  
+  // タップで開くための状態管理
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   // GASから本日のデータを取得
   useEffect(() => {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        // GETリクエストで担当者と「当日(today)」を指定して取得
         const res = await fetch(`${GAS_URL}?type=today&worker=${encodeURIComponent(worker)}`);
         if (!res.ok) throw new Error("通信エラー");
         const json = await res.json();
         
-        // 新しい時間が上に来るように並び替え（降順）
+        // 新しい時間が上に来るように並び替え
         const sortedData = json.sort((a: any, b: any) => {
           if (!a.開始時間 || !b.開始時間) return 0;
           return a.開始時間 > b.開始時間 ? -1 : 1;
@@ -57,7 +71,7 @@ function ReportList() {
       {/* 画面上部エリア */}
       <div className="w-[92%] max-w-md mt-6 mb-4">
         <div className="bg-[#eaaa43] rounded-[14px] py-4 px-4 shadow-sm flex items-center justify-between">
-          <Link href="/" className="text-white font-bold flex items-center w-16 active:scale-90 transition-transform">
+          <Link href="/report" className="text-white font-bold flex items-center w-16 active:scale-90 transition-transform">
             <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg>
             <span className="text-sm tracking-wider">戻る</span>
           </Link>
@@ -105,57 +119,92 @@ function ReportList() {
           </div>
         ) : (
           data.map((item, index) => {
-            // ★ 条件判定
             const isContracted = item.メモ && item.メモ.includes('成約');
             const isHighway = item.遠隔高速利用 === '有';
+            const isExpanded = expandedIndex === index;
 
             return (
-              // ★ 成約時の虹色グラデーション枠
-              <div key={index} className={`rounded-[14px] shadow-sm relative p-[3px] ${isContracted ? 'bg-gradient-to-r from-red-500 via-yellow-400 via-green-400 via-blue-500 to-purple-500' : 'bg-transparent'}`}>
+              <div 
+                key={index} 
+                onClick={() => setExpandedIndex(isExpanded ? null : index)}
+                className={`rounded-[14px] shadow-sm relative cursor-pointer transition-all duration-300 ${isContracted ? 'p-[3px] bg-gradient-to-r from-red-400 via-yellow-400 via-green-400 via-blue-400 to-purple-400' : 'p-0 bg-transparent'}`}
+              >
                 
-                {/* ★ 遠隔高速利用時は青色背景、それ以外は白背景 */}
-                <div className={`rounded-[11px] p-3 w-full h-full relative overflow-hidden flex flex-col gap-1.5 ${isHighway ? 'bg-[#1e40af] text-white border-none' : 'bg-white border border-gray-100 text-gray-800'} ${isContracted && !isHighway ? 'bg-white' : ''}`}>
+                <div className={`rounded-[11px] p-3.5 w-full relative overflow-hidden flex flex-col gap-1.5 ${isHighway ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100'} ${isContracted && !isHighway ? 'border-none' : 'border'}`}>
                   
-                  {/* ★ 遠隔高速時の巨大な透かし車アイコン */}
+                  {/* ★ 修正：車のアイコンを大きく（110px）、濃く（opacity-40）して目立たせる */}
                   {isHighway && (
-                    <div className="absolute -right-4 top-1/2 -translate-y-1/2 opacity-20 pointer-events-none flex flex-col items-center justify-center transform -rotate-12">
-                      <svg width="100" height="100" viewBox="0 0 24 24" fill="currentColor">
+                    <div className="absolute right-[-10px] top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center transform -rotate-12 opacity-40 text-blue-400">
+                      <svg width="110" height="110" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.08 3.11H5.77L6.85 7zM7.5 16c-.83 0-1.5-.67-1.5-1.5S6.67 13 7.5 13s1.5.67 1.5 1.5S8.33 16 7.5 16zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
                       </svg>
-                      <span className="font-black text-2xl tracking-widest mt-[-10px]">遠隔高速</span>
                     </div>
                   )}
 
-                  {/* 行1: 時間とクライアント・訪問先 */}
-                  <div className="flex justify-between items-center text-xs font-bold relative z-10">
-                    <span className={`px-2 py-0.5 rounded-md ${isHighway ? 'bg-white/20' : 'bg-gray-100'}`}>
-                      {item.開始時間} - {item.終了時間}
-                    </span>
-                    <span className="truncate ml-2 text-right flex-1 text-[13px]">
-                      {item.クライアント && item.クライアント !== '(-----)' ? `${item.クライアント}：` : ''}{item.訪問先}
-                    </span>
-                  </div>
-
-                  {/* 行2: 業務内容（コンパクトに1行で表示） */}
-                  <div className={`text-[10px] truncate font-medium relative z-10 ${isHighway ? 'text-blue-100' : 'text-gray-500'}`}>
-                    {item.エリア} / {item.品目} / {item.依頼内容} / {item.作業内容}
-                  </div>
-
-                  {/* 行3: 金額（横並びでスッキリと） */}
-                  <div className="flex justify-between items-end mt-1 relative z-10">
-                    <div className="text-[10px] font-bold">
-                      {isContracted && <span className="bg-gradient-to-r from-red-500 to-purple-500 text-white px-1.5 py-0.5 rounded mr-2">成約</span>}
+                  <div className="flex justify-between items-center relative z-10">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${isHighway ? 'bg-white/60 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>
+                        {formatTime(item.開始時間)} - {formatTime(item.終了時間)}
+                      </span>
                     </div>
-                    <div className="flex gap-3 text-[11px] font-black">
-                      <span>技: ¥{Number(item.技術料).toLocaleString()}</span>
+                    
+                    <div className="text-gray-400">
+                      {isExpanded ? (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 15l7-7 7 7"></path></svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="relative z-10">
+                    <div className="text-[13px] font-black text-gray-800 truncate">
+                      {item.クライアント && item.クライアント !== '(-----)' ? <span className="text-[10px] text-gray-500 mr-1 bg-gray-100 px-1.5 py-0.5 rounded">{item.クライアント}</span> : ''}
+                      {item.訪問先}
+                    </div>
+                    <div className={`text-[10px] truncate font-bold mt-0.5 ${isHighway ? 'text-blue-600/80' : 'text-gray-400'}`}>
+                      {item.エリア} / {item.品目} / {item.作業内容}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-end mt-1 relative z-10">
+                    <div className="flex gap-1.5 flex-wrap">
+                      {isContracted && <span className="bg-gradient-to-r from-red-500 to-purple-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold shadow-sm">成約</span>}
+                      {/* ★ 修正：文言を「遠隔・高速利用: 〇〇」に変更 */}
+                      {isHighway && <span className="bg-blue-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold shadow-sm border border-blue-400">遠隔・高速利用: {item.伝票番号}</span>}
+                    </div>
+                    <div className="flex gap-2.5 text-[11px] font-black">
+                      <span className="text-gray-600">技:¥{Number(item.技術料).toLocaleString()}</span>
                       {item.作業区分 === '修理' && (
-                        <span className={isHighway ? 'text-blue-200' : 'text-[#547b97]'}>修: ¥{Number(item.修理金額).toLocaleString()}</span>
+                        <span className={isHighway ? 'text-blue-700' : 'text-[#547b97]'}>修:¥{Number(item.修理金額).toLocaleString()}</span>
                       )}
                       {item.作業区分 === '販売' && (
-                        <span className={isHighway ? 'text-pink-300' : 'text-[#d98c77]'}>販: ¥{Number(item.販売金額).toLocaleString()}</span>
+                        <span className={isHighway ? 'text-pink-600' : 'text-[#d98c77]'}>販:¥{Number(item.販売金額).toLocaleString()}</span>
                       )}
                     </div>
                   </div>
+
+                  {/* タップして開く詳細エリア */}
+                  {isExpanded && (
+                    <div className={`mt-3 pt-3 border-t ${isHighway ? 'border-blue-200' : 'border-gray-100'} text-[11px] space-y-2 animate-fade-in relative z-10`}>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 font-bold">状況</span>
+                        <span className={`font-black px-2 py-0.5 rounded ${item.状況 === '完了' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{item.状況}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 font-bold">提案</span>
+                        <span className="font-black text-gray-700">{item.提案有無} {item.提案内容 ? `(${item.提案内容})` : ''}</span>
+                      </div>
+                      {item.メモ && (
+                        <div>
+                          <span className="text-gray-500 font-bold block mb-1">メモ</span>
+                          <div className={`p-2.5 rounded-lg ${isHighway ? 'bg-white/60' : 'bg-gray-50'} text-gray-700 font-medium whitespace-pre-wrap leading-relaxed`}>
+                            {item.メモ}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                 </div>
               </div>
@@ -175,9 +224,9 @@ export default function ReportListPage() {
         <ReportList />
       </Suspense>
 
-      {/* 画面下のタブバー（A-0と同じくリンクを構築） */}
+      {/* 画面下のタブバー */}
       <div className="fixed bottom-0 left-0 right-0 w-full bg-white rounded-t-[30px] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] h-[70px] flex justify-around items-center px-4 max-w-md mx-auto pb-2 z-40">
-        <Link href="/" className="p-2 cursor-pointer relative">
+        <Link href="/report" className="p-2 cursor-pointer relative">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         </Link>
         <div className="p-2 cursor-pointer relative">
