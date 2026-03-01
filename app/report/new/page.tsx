@@ -2,7 +2,8 @@
 
 import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+// ★ 変更: 画面遷移のために useRouter を追加
+import { useSearchParams, useRouter } from 'next/navigation';
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyi3gbullz4u0EqXBkhMVxiqfZq0-PKdhim9QVrSyl1q4SvBaS46GX5lzsyZrAu5j8u2A/exec';
 
@@ -25,6 +26,8 @@ function getTodayString() {
 
 function ReportForm() {
   const searchParams = useSearchParams();
+  // ★ 追加: 画面移動用のルーターを取得
+  const router = useRouter();
   const defaultWorker = searchParams.get('worker') || ""; 
 
   const [formData, setFormData] = useState({
@@ -36,7 +39,7 @@ function ReportForm() {
     エリア: '',
     クライアント: '',
     品目: '',
-    品番: '', // ★ 追加: 品番
+    品番: '',
     依頼内容: '',
     作業内容: '',
     作業区分: '修理',
@@ -53,16 +56,16 @@ function ReportForm() {
   });
 
   const [showConfirm, setShowConfirm] = useState(false);
+  // ★ 追加: 送信成功ポップアップの表示・非表示を管理
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
 
   const handleStartTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const startTime = e.target.value;
     
-    // ★ 変更: 開始時間が変更されたら、常に60分後を計算して終了時間にセットする
     if (startTime) {
       const [hours, minutes] = startTime.split(':').map(Number);
-      // 60分足す（時間は+1、分はそのまま）
       let endHours = (hours + 1) % 24;
       let endMinutes = minutes;
       
@@ -75,7 +78,6 @@ function ReportForm() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    // ★ 追加: 品目がトイレ以外に変わった場合、品番をクリアする配慮
     if (name === '品目' && value !== 'トイレ') {
       setFormData({ ...formData, [name]: value, 品番: '' });
     } else {
@@ -110,7 +112,7 @@ function ReportForm() {
       エリア: formData.エリア,
       クライアント: formData.クライアント,
       品目: formData.品目,
-      品番: formData.品目 === 'トイレ' ? formData.品番 : '', // ★ 追加: トイレの時だけ品番を送る
+      品番: formData.品目 === 'トイレ' ? formData.品番 : '',
       依頼内容: formData.依頼内容,
       作業内容: formData.作業内容,
       作業区分: formData.作業区分,
@@ -137,8 +139,9 @@ function ReportForm() {
         body: formBody,
       });
 
-      setSubmitMessage("送信しました。お疲れ様でした");
+      // ★ 変更: 成功時はポップアップを表示し、確認モーダルを閉じる
       setShowConfirm(false);
+      setShowSuccessModal(true);
       
       setFormData({
         ...formData,
@@ -148,7 +151,7 @@ function ReportForm() {
         エリア: '',
         クライアント: '',
         品目: '',
-        品番: '', // ★ 追加: 送信後にリセット
+        品番: '',
         依頼内容: '',
         作業内容: '',
         技術料: '0',
@@ -270,7 +273,6 @@ function ReportForm() {
               </div>
             </div>
             
-            {/* ★ 追加: 品目がトイレの時だけ出現する「品番」入力欄 */}
             {formData.品目 === 'トイレ' && (
               <div className="animate-fade-in bg-orange-50/50 p-3 rounded-xl border border-orange-100">
                 <label className={`${labelClass} text-orange-600`}>品番（※トイレ選択時）</label>
@@ -415,7 +417,7 @@ function ReportForm() {
         </button>
       </form>
 
-      {/* 確認モーダル */}
+      {/* 既存の確認モーダル */}
       {showConfirm && (
         <div className="fixed inset-0 bg-black/40 z-[100] flex items-center justify-center p-4">
           <div className="bg-[#f8f6f0] rounded-[20px] w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl flex flex-col">
@@ -445,7 +447,6 @@ function ReportForm() {
               </div>
               <div className="grid grid-cols-3 border-b border-gray-200 pb-2">
                 <span className="text-gray-500 text-xs">作業概要</span>
-                {/* ★ 追加: 品番の確認表示 */}
                 <span className="col-span-2 text-right">
                   {formData.品目} {formData.品目 === 'トイレ' && formData.品番 ? `(品番: ${formData.品番})` : ''} / {formData.依頼内容} / {formData.作業内容}
                 </span>
@@ -483,6 +484,52 @@ function ReportForm() {
           </div>
         </div>
       )}
+
+      {/* ★ 追加: 送信完了後の成功ポップアップ（モーダル） */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black/50 z-[120] flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-[24px] w-full max-w-sm p-8 flex flex-col items-center text-center shadow-2xl transform transition-all scale-100">
+            
+            {/* アニメーション付きのサクセスアイコン */}
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6 animate-bounce">
+              <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+
+            <h3 className="text-xl font-black text-gray-800 mb-2 tracking-wider">送信完了！</h3>
+            <p className="text-sm text-gray-500 font-medium mb-8">
+              日報データが正常に保存されました。<br/>続けて次の案件を入力しますか？
+            </p>
+
+            {/* 選択肢ボタン */}
+            <div className="w-full flex flex-col gap-3">
+              <button 
+                onClick={() => setShowSuccessModal(false)} 
+                className="w-full bg-[#eaaa43] text-white py-3.5 rounded-xl font-bold tracking-widest active:scale-95 transition-transform shadow-md"
+              >
+                続けて入力する
+              </button>
+              
+              <button 
+                onClick={() => router.push('/report/list')} 
+                className="w-full bg-gray-100 text-gray-600 py-3.5 rounded-xl font-bold tracking-widest active:scale-95 transition-transform"
+              >
+                当日一覧（A-2）を確認
+              </button>
+              
+              <button 
+                onClick={() => router.push('/report')} 
+                className="w-full bg-white border border-gray-200 text-gray-400 py-3 rounded-xl font-bold text-sm mt-2 active:scale-95 transition-transform"
+              >
+                メニューへ戻る
+              </button>
+            </div>
+            
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
