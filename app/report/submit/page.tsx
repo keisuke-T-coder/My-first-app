@@ -59,7 +59,6 @@ function SubmitReportContent() {
   const router = useRouter();
   const worker = searchParams.get('worker') || "";
 
-  // ★ 変更: 全てのレポートを保持し、表示用（targetDate）で切り替える
   const [allReports, setAllReports] = useState<any[]>([]);
   const [targetDate, setTargetDate] = useState(getTodayString());
   const [isLoading, setIsLoading] = useState(true);
@@ -73,7 +72,6 @@ function SubmitReportContent() {
       return;
     }
 
-    // 初回のみ「全データ」を取得する
     const fetchAllReports = async () => {
       try {
         const res = await fetch(`${GAS_URL}?worker=${encodeURIComponent(worker)}`);
@@ -90,14 +88,12 @@ function SubmitReportContent() {
     fetchAllReports();
   }, [worker, isInvalidWorker]);
 
-  // ★ 変更: 日付の切り替え機能
   const changeDate = (offset: number) => {
     const newD = new Date(targetDate);
     newD.setDate(newD.getDate() + offset);
     setTargetDate(toDateString(newD));
   };
 
-  // 現在のターゲット日付でフィルタリング
   const displayedReports = allReports.filter((r: any) => extractDateForInput(r.日付) === targetDate);
 
   let totalTechFee = 0;
@@ -149,7 +145,6 @@ function SubmitReportContent() {
     );
   }
 
-  // 表示用日付の作成
   const dObj = new Date(targetDate);
   const displayDate = `${dObj.getFullYear()}.${String(dObj.getMonth() + 1).padStart(2, '0')}.${String(dObj.getDate()).padStart(2, '0')}`;
   const days = ['日', '月', '火', '水', '木', '金', '土'];
@@ -166,15 +161,15 @@ function SubmitReportContent() {
         </button>
       </div>
 
-      {/* 👑 ヘッダー（日付切り替え機能つき） */}
+      {/* 👑 ヘッダー */}
       <div className="bg-gradient-to-r from-[#eaaa43] to-[#d4952b] rounded-[14px] p-2.5 shadow-md text-white flex justify-between items-center z-10">
-        <div>
-          <div className="flex items-center gap-1.5 mb-1">
+        
+        {/* 左側：担当者、日付、件数 */}
+        <div className="flex flex-col justify-between h-full">
+          <div className="flex items-center gap-1.5 mb-2">
             <span className="text-[9px] font-bold bg-white/20 px-1.5 py-[2px] rounded shadow-inner backdrop-blur-sm">
               担当: {worker}
             </span>
-            
-            {/* ★ 変更: 日付を前後に切り替えるUI */}
             <div className="flex items-center gap-2 bg-white/10 rounded-full px-1 py-[1px]">
               <button onClick={() => changeDate(-1)} className="p-0.5 hover:bg-white/20 rounded-full active:scale-90 transition-transform">
                 <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7"></path></svg>
@@ -186,18 +181,24 @@ function SubmitReportContent() {
                 <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7"></path></svg>
               </button>
             </div>
-            
           </div>
-          <div className="text-[10px] font-medium drop-shadow-sm leading-none mt-1.5 pl-0.5">
-            完了件数: <span className="text-[15px] font-black">{sortedReports.length}</span> 件
-          </div>
-        </div>
-        <div className="text-right pr-0.5">
-          <div className="text-[8px] opacity-90 leading-none drop-shadow-sm mb-0.5">売上合計</div>
-          <div className="text-[18px] font-black leading-none drop-shadow-md">
-            <span className="text-[10px] mr-0.5 font-bold opacity-80">¥</span>{totalAmount.toLocaleString()}
+          <div className="text-[10px] font-medium drop-shadow-sm leading-none pl-0.5">
+            完了件数: <span className="text-[14px] font-black">{sortedReports.length}</span> 件
           </div>
         </div>
+
+        {/* ★ 変更: 右側：技術料と売上合計をスマートに縦並び表示 */}
+        <div className="text-right pr-0.5 flex flex-col justify-center gap-1">
+          <div className="flex items-center justify-end gap-1.5">
+            <span className="text-[8px] opacity-90 drop-shadow-sm">技術料計</span>
+            <span className="text-[13px] font-black drop-shadow-md tracking-wider">¥{totalTechFee.toLocaleString()}</span>
+          </div>
+          <div className="flex items-end justify-end gap-1.5">
+            <span className="text-[9px] opacity-90 drop-shadow-sm pb-[2px]">売上合計</span>
+            <span className="text-[18px] font-black drop-shadow-md tracking-wider leading-none">¥{totalAmount.toLocaleString()}</span>
+          </div>
+        </div>
+
       </div>
 
       {/* 📋 リスト部分 */}
@@ -230,7 +231,6 @@ function SubmitReportContent() {
 
           const innerClass = (isSeiyaku || isRemote) ? "bg-white rounded-[4px]" : "bg-transparent";
 
-          // ★ 追加: メモ欄から「【成約】」の文字を取り除いた純粋な製品名テキストを抽出
           const seiyakuProductText = isSeiyaku && r.メモ ? r.メモ.replace(/【成約】\n?/g, '').trim() : '';
 
           return (
@@ -255,14 +255,11 @@ function SubmitReportContent() {
                   
                   {/* バッジエリア */}
                   <div className="flex items-center flex-wrap gap-1 mt-[2px] overflow-hidden">
-                    
-                    {/* ★ 変更: 成約バッジの横に製品名を追記 */}
                     {isSeiyaku && (
                       <div className="flex items-center max-w-full overflow-hidden mr-1">
                         <span className="text-[7.5px] text-white font-bold bg-gradient-to-r from-pink-400 via-yellow-400 to-blue-400 px-1.5 py-[1.5px] rounded-[2px] leading-none shadow-sm shrink-0">
                           成約
                         </span>
-                        {/* メモの内容（製品名等）を表示。長ければ「...」になる */}
                         {seiyakuProductText && (
                           <span className="text-[7.5px] text-pink-600 font-bold ml-1 truncate">
                             {seiyakuProductText}
@@ -270,7 +267,6 @@ function SubmitReportContent() {
                         )}
                       </div>
                     )}
-
                     {isRemote && (
                       <span className="text-[7.5px] text-white font-bold bg-[#6495ED] px-1.5 py-[1.5px] rounded-[2px] leading-none shadow-sm shrink-0">
                         遠隔
