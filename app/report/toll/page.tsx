@@ -1,0 +1,247 @@
+"use client";
+
+import React, { useState, useEffect, Suspense, useCallback } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyi3gbullz4u0EqXBkhMVxiqfZq0-PKdhim9QVrSyl1q4SvBaS46GX5lzsyZrAu5j8u2A/exec';
+
+const assignees = ["佐藤", "田中", "南", "新田", "德重"];
+
+// 時間・日付の整形関数
+const formatTimeForDisplay = (timeStr: string) => {
+  if (!timeStr) return "";
+  if (timeStr.includes("T")) {
+    const d = new Date(timeStr);
+    if (!isNaN(d.getTime())) return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  }
+  return timeStr;
+};
+
+const extractDateForInput = (dateStr: string) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  return dateStr;
+};
+
+const getShortDateString = (dateStr: string) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const days = ['日', '月', '火', '水', '木', '金', '土'];
+  return `${d.getMonth() + 1}月${d.getDate()}日(${days[d.getDay()]})`;
+};
+
+function TollList() {
+  const searchParams = useSearchParams();
+  const initialWorker = searchParams.get('worker') || ""; 
+
+  const [currentWorker, setCurrentWorker] = useState(initialWorker);
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  const [allData, setAllData] = useState<any[]>([]); 
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const fetchData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`${GAS_URL}?worker=${encodeURIComponent(currentWorker)}`);
+      if (!res.ok) throw new Error("通信エラー");
+      const json = await res.json();
+      setAllData(json);
+    } catch (err) {
+      setError("データの取得に失敗しました。");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentWorker]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // A-4特有のデータ抽出と並び替え
+  const filteredData = allData.filter(item => {
+    if (item.遠隔高速利用 !== '有') return false; 
+    if (!item.日付) return false;
+    
+    const cleanDate = extractDateForInput(item.日付);
+    if (!cleanDate) return false;
+    
+    const itemMonth = cleanDate.substring(0, 7);
+    return itemMonth === selectedMonth;
+  }).sort((a, b) => {
+    // 「全員」が選ばれている時は、まず担当者名で並び替える（グループ化）
+    if (currentWorker === "" || currentWorker === "add") {
+      const workerA = a.担当者 || "";
+      const workerB = b.担当者 || "";
+      if (workerA !== workerB) {
+        return workerA.localeCompare(workerB, 'ja');
+      }
+    }
+
+    // 次に新しい日付が上に来るようにソート
+    const dateA = new Date(a.日付).getTime();
+    const dateB = new Date(b.日付).getTime();
+    if (dateA !== dateB) return dateB - dateA;
+    
+    // 同じ日付・担当者なら時間が早い順に並べる
+    if (!a.開始時間 || !b.開始時間) return 0;
+    return a.開始時間 > b.開始時間 ? 1 : -1; 
+  });
+
+  const totalCount = filteredData.length;
+  const selectedMonthDisplay = selectedMonth.replace('-', '年') + '月';
+
+  return (
+    <div className="flex flex-col items-center w-full relative">
+      
+      {/* 画面上部エリア（ブルー基調で統一） */}
+      <div className="w-[92%] max-w-md mt-6 mb-4">
+        
+        {/* ヘッダー（右上のバッジをなくし、タイトルを強調） */}
+        <div className="bg-[#1e40af] rounded-[14px] py-4 px-4 shadow-md flex items-center justify-between mb-4 relative overflow-hidden">
+          {/* 透かしアイコン */}
+          <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-20 pointer-events-none">
+            <svg width="80" height="80" viewBox="0 0 24 24" fill="white">
+              <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.08 3.11H5.77L6.85 7zM7.5 16c-.83 0-1.5-.67-1.5-1.5S6.67 13 7.5 13s1.5.67 1.5 1.5S8.33 16 7.5 16zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+            </svg>
+          </div>
+
+          <Link href="/report" className="text-white font-bold flex items-center w-16 active:scale-90 transition-transform relative z-10">
+            <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg>
+            <span className="text-sm tracking-wider">戻る</span>
+          </Link>
+          <h1 className="text-white font-bold tracking-widest text-[17px] flex-1 text-center relative z-10 whitespace-nowrap">高速・遠隔地チェック</h1>
+          <div className="w-16"></div> {/* 右側はあえて空ける */}
+        </div>
+
+        {/* ★ A-4特別仕様：横スクロールでワンタップ切り替えできる担当者タブ */}
+        <div className="flex gap-2.5 overflow-x-auto pb-3 w-full snap-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <button 
+            onClick={() => setCurrentWorker("")} 
+            className={`snap-start shrink-0 px-5 py-2 rounded-full text-[13px] font-bold transition-all border ${currentWorker === "" || currentWorker === "add" ? "bg-[#1e40af] text-white border-[#1e40af] shadow-md scale-105" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}
+          >
+            全員まとめ
+          </button>
+          {assignees.map(a => (
+            <button 
+              key={a} 
+              onClick={() => setCurrentWorker(a)} 
+              className={`snap-start shrink-0 px-5 py-2 rounded-full text-[13px] font-bold transition-all border ${currentWorker === a ? "bg-[#1e40af] text-white border-[#1e40af] shadow-md scale-105" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}
+            >
+              {a}
+            </button>
+          ))}
+        </div>
+
+        {/* 月選択ピッカー */}
+        <div className="bg-white rounded-[14px] p-3 shadow-sm flex justify-between items-center border border-gray-100">
+          <span className="text-sm font-bold text-gray-500 ml-1">表示月を選択</span>
+          <input 
+            type="month" 
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 text-sm font-bold text-blue-800 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all"
+          />
+        </div>
+      </div>
+
+      {/* サマリーカード */}
+      <div className="w-[92%] max-w-md bg-white rounded-[16px] shadow-[0_2px_10px_rgba(0,0,0,0.04)] p-4 mb-4 border-l-4 border-[#1e40af]">
+        <div className="flex justify-between items-center">
+          <div className="text-gray-600 font-bold text-sm">🚙 {selectedMonthDisplay} の利用状況</div>
+          <div className="text-[#1e40af] font-black text-2xl">{totalCount}<span className="text-xs ml-1 font-bold text-gray-400">件</span></div>
+        </div>
+      </div>
+
+      {/* 伝票リスト（フラットリスト形式で一気に見せる） */}
+      <div className="w-[92%] max-w-md flex flex-col gap-3">
+        {isLoading ? (
+          <div className="text-center py-10 text-blue-400 font-bold text-sm animate-pulse">利用データを検索中...</div>
+        ) : error ? (
+          <div className="text-center py-10 text-red-400 font-bold text-sm">{error}</div>
+        ) : filteredData.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-[16px] shadow-sm border border-dashed border-gray-200">
+            <span className="text-4xl mb-3 block opacity-50">🛣️</span>
+            <p className="text-gray-400 font-bold text-sm">{selectedMonthDisplay} の高速・遠隔利用はありません</p>
+          </div>
+        ) : (
+          filteredData.map((item, index) => (
+            <div key={index} className="bg-white rounded-[14px] shadow-sm border border-blue-50 overflow-hidden flex flex-col">
+              
+              {/* 上部：日付・時間・担当者 */}
+              <div className="bg-blue-50/50 p-2.5 px-4 border-b border-blue-100/50 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-black text-blue-900">{getShortDateString(item.日付)}</span>
+                  <span className="text-[11px] font-bold text-blue-700/70">{formatTimeForDisplay(item.開始時間)}</span>
+                </div>
+                <div className="text-[11px] font-bold bg-white text-blue-800 px-2.5 py-0.5 rounded shadow-sm border border-blue-100">
+                  担: {item.担当者}
+                </div>
+              </div>
+
+              {/* 下部：伝票番号と訪問先 */}
+              <div className="p-4 flex flex-col gap-3 relative">
+                
+                <div className="flex items-start justify-between gap-2 z-10">
+                  <div className="flex-1">
+                    <p className="text-[10px] text-gray-400 font-bold mb-0.5">訪問先</p>
+                    <p className="text-sm font-black text-gray-800 leading-snug">
+                      {item.クライアント && item.クライアント !== '(-----)' ? <span className="text-[10px] text-gray-500 mr-1 bg-gray-100 px-1.5 py-0.5 rounded">{item.クライアント}</span> : ''}
+                      {item.訪問先}
+                    </p>
+                    <p className="text-[10px] text-gray-500 font-medium mt-1">{item.エリア} / {item.作業内容}</p>
+                  </div>
+                  
+                  {/* 最も重要な「伝票番号」を右側に大きく配置 */}
+                  <div className="text-right">
+                    <p className="text-[10px] text-blue-500 font-bold mb-0.5">伝票番号</p>
+                    <div className="bg-blue-600 text-white font-black text-lg px-3 py-1.5 rounded-lg shadow-md tracking-wider min-w-[80px] text-center">
+                      {item.伝票番号 || '未入力'}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* 画面下のタブバー */}
+      <div className="fixed bottom-0 left-0 right-0 w-full bg-white rounded-t-[30px] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] h-[70px] flex justify-around items-center px-4 max-w-md mx-auto pb-2 z-40">
+        <Link href="/report" className="p-2 cursor-pointer relative">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </Link>
+        <div className="p-2 cursor-pointer relative">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        </div>
+        <div className="p-2 cursor-pointer relative">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#eaaa43" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span className="absolute top-1 right-1 w-2 h-2 bg-[#eaaa43] rounded-full border-2 border-white"></span>
+        </div>
+        <div className="p-2 cursor-pointer relative">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Page(props: any) {
+  return (
+    <div className="min-h-screen bg-[#f8f6f0] font-sans text-slate-800 pb-32">
+      <Suspense fallback={<div className="flex justify-center items-center h-screen text-blue-500 font-bold">画面を読み込んでいます...</div>}>
+        <TollList />
+      </Suspense>
+    </div>
+  );
+}
