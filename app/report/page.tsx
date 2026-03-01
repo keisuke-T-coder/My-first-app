@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-// ★ 変更: URL制御のためのルーターを追加
 import { useSearchParams, useRouter } from 'next/navigation';
 
 // GASのURL
@@ -17,7 +16,8 @@ const extractDateForInput = (dateStr: string) => {
   return dateStr;
 };
 
-export default function Page() {
+// ★ 変更: 関数名を Page から ReportHub に変更
+function ReportHub() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
@@ -148,15 +148,15 @@ export default function Page() {
     }
   };
 
-  // ★ 追加: パネルをタップした時にURLパラメーターをつけてポップアップを開く
+  // パネルをタップした時にURLパラメーターをつけてポップアップを開く
   const openModal = (modalName: string) => {
     router.push(`?modal=${modalName}`, { scroll: false });
   };
 
-  // ★ 追加: ポップアップを閉じる（URLのパラメーターを消す）
+  // ポップアップを閉じる（URLのパラメーターを消す）
   const closeModal = () => {
     router.push('/report', { scroll: false });
-    setIsNoticeEditMode(false); // 編集モードもリセット
+    setIsNoticeEditMode(false);
   };
 
   // 集計計算ロジック
@@ -206,9 +206,8 @@ export default function Page() {
           <div className="w-16"></div>
         </div>
 
-        {/* ★ 変更: 日報送信（A-5）ボタンと担当者選択を並べる */}
+        {/* 日報送信（A-5）ボタンと担当者選択 */}
         <div className="mt-5 flex justify-between items-center gap-2">
-          
           <Link href={`/report/submit${getQueryString()}`} className="bg-white border border-[#eaaa43] text-[#eaaa43] font-bold rounded-full px-4 py-2.5 shadow-sm active:scale-95 transition-transform flex items-center text-sm z-20 hover:bg-orange-50">
             <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             日報送信
@@ -270,7 +269,7 @@ export default function Page() {
             style={{ transform: `translateX(-${activeIndex * (100 / 3)}%)` }}
           >
             
-            {/* 0: お知らせ パネル（★変更: クリックでポップアップを開く） */}
+            {/* 0: お知らせ パネル */}
             <div className="w-1/3 px-1.5 h-64">
               <div 
                 onClick={() => openModal('notice')}
@@ -282,7 +281,6 @@ export default function Page() {
                   </div>
                 ) : (
                   <div className="flex flex-col h-full animate-fade-in relative pointer-events-none">
-                    {/* 右上の歯車アイコン */}
                     <div className="absolute -top-1 -right-1 p-2 text-gray-300 z-10">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     </div>
@@ -303,7 +301,7 @@ export default function Page() {
               </div>
             </div>
 
-            {/* 1: たったできることパネル（★変更: クリックでポップアップを開く） */}
+            {/* 1: たったできることパネル */}
             <div className="w-1/3 px-1.5 h-64">
               <div 
                 onClick={() => openModal('todo')}
@@ -332,11 +330,10 @@ export default function Page() {
               </div>
             </div>
 
-            {/* 2: リアルタイム集計パネル（★変更: クリックでポップアップを開く。※内部のタブ切り替えは直接できるようにしておく） */}
+            {/* 2: リアルタイム集計パネル */}
             <div className="w-1/3 px-1.5 h-64">
               <div 
                 onClick={(e) => {
-                  // タブボタンを押した時はポップアップを開かない
                   if ((e.target as HTMLElement).tagName !== 'BUTTON') {
                     openModal('summary');
                   }
@@ -421,7 +418,7 @@ export default function Page() {
       </div>
 
       {/* =========================================
-          ★ 追加: パネルタップ時の全画面ポップアップ（モーダル）
+          全画面ポップアップ（モーダル）
           ========================================= */}
       {activeModal && (
         <div className="fixed inset-0 bg-[#f8f6f0] z-[100] flex flex-col animate-fade-in overflow-y-auto">
@@ -437,7 +434,7 @@ export default function Page() {
               {activeModal === 'todo' && 'たったできること'}
               {activeModal === 'summary' && '集計詳細'}
             </h2>
-            <div className="w-16"></div> {/* バランス調整用 */}
+            <div className="w-16"></div>
           </div>
 
           {/* モーダルの中身 */}
@@ -448,7 +445,6 @@ export default function Page() {
               <div className="bg-white rounded-[20px] shadow-sm p-6">
                 <div className="flex justify-between items-center mb-6">
                   <span className="text-4xl">📢</span>
-                  {/* 管理者用編集ボタン */}
                   <button onClick={() => { setIsNoticeEditMode(true); setDraftNoticeText(noticeText); }} className="text-gray-400 hover:text-[#eaaa43] p-2 bg-gray-50 rounded-full">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                   </button>
@@ -557,7 +553,7 @@ export default function Page() {
       )}
 
       {/* 画面下のタブバー */}
-      <div className="fixed bottom-0 left-0 right-0 w-full bg-white rounded-t-[30px] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] h-[70px] flex justify-around items-center px-4 max-w-md mx-auto pb-2 z-50">
+      <div className="fixed bottom-0 left-0 right-0 w-full bg-white rounded-t-[30px] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] h-[70px] flex justify-around items-center px-4 max-w-md mx-auto pb-2 z-40">
         <Link href="/" className="p-2 cursor-pointer relative z-50">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         </Link>
@@ -573,5 +569,14 @@ export default function Page() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ★ 追加: Next.jsのビルドエラーを防ぐため、useSearchParamsを含むコンポーネントをSuspenseで囲む
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#f8f6f0] flex justify-center items-center text-gray-500 font-bold">読み込み中...</div>}>
+      <ReportHub />
+    </Suspense>
   );
 }
