@@ -27,25 +27,31 @@ function getTodayString() {
   return toDateString(new Date());
 }
 
-function formatTime(timeStr: string) {
-  if (!timeStr) return "未定";
-  if (/^\d{1,2}:\d{2}$/.test(timeStr)) return timeStr;
-  try {
-    const d = new Date(timeStr);
-    if (!isNaN(d.getTime())) {
-      const hours = String(d.getUTCHours()).padStart(2, '0');
-      const minutes = String(d.getUTCMinutes()).padStart(2, '0');
-      return `${hours}:${minutes}`;
-    }
-  } catch (e) { }
-  return timeStr;
-}
-
+// ==========================================
+// ★ 修正：時間を日本時間（JST）で正しく抽出する関数
+// ==========================================
 function extractTime(timeStr: string) {
   if (!timeStr) return "99:99"; 
+  
+  // 既に「09:30」のような形式で来ていればそのまま返す
   if (/^\d{1,2}:\d{2}$/.test(timeStr)) return timeStr;
-  const match = timeStr.match(/T(\d{2}:\d{2})/);
-  if (match) return match[1];
+
+  try {
+    // "1899-12-29T15:03:00.000Z" のようなUTC日時文字列をDateオブジェクトにする
+    const d = new Date(timeStr);
+    
+    // 有効な日付データとして認識された場合
+    if (!isNaN(d.getTime())) {
+      // getHours(), getMinutes() は、スマホ（ブラウザ）のタイムゾーン（日本）に合わせて
+      // 自動的にUTCから+9時間された現地の「時・分」を返してくれます。
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${hours}:${minutes}`;
+    }
+  } catch (e) {
+    console.error("時間の変換に失敗しました:", timeStr);
+  }
+  
   return "99:99";
 }
 
@@ -104,6 +110,7 @@ function SubmitReportContent() {
     totalAmount += (Number(r.修理金額) || 0) + (Number(r.販売金額) || 0);
   });
 
+  // ★ 修正された日本時間（+9時間）を使って、正しく時系列順に並び替える
   const sortedReports = [...displayedReports].sort((a, b) => {
     const timeA = extractTime(a.開始時間);
     const timeB = extractTime(b.開始時間);
@@ -187,7 +194,7 @@ function SubmitReportContent() {
           </div>
         </div>
 
-        {/* ★ 変更: 右側：技術料と売上合計をスマートに縦並び表示 */}
+        {/* 右側：技術料と売上合計 */}
         <div className="text-right pr-0.5 flex flex-col justify-center gap-1">
           <div className="flex items-center justify-end gap-1.5">
             <span className="text-[8px] opacity-90 drop-shadow-sm">技術料計</span>
