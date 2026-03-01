@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+// ★ 変更: URL制御のためのルーターを追加
+import { useSearchParams, useRouter } from 'next/navigation';
 
 // GASのURL
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyi3gbullz4u0EqXBkhMVxiqfZq0-PKdhim9QVrSyl1q4SvBaS46GX5lzsyZrAu5j8u2A/exec';
@@ -16,6 +18,12 @@ const extractDateForInput = (dateStr: string) => {
 };
 
 export default function Page() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
+  // URLのクエリパラメーターから、現在開いているモーダルの種類を取得
+  const activeModal = searchParams.get('modal');
+
   // 担当者の初期値をローカルストレージから取得
   const [assignee, setAssignee] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -40,7 +48,7 @@ export default function Page() {
   const [allReports, setAllReports] = useState<any[]>([]);
   const [isReportsLoading, setIsReportsLoading] = useState(false);
 
-  // 1. お知らせをGASから取得（初回起動時のみ）
+  // 1. お知らせをGASから取得
   useEffect(() => {
     const fetchNotice = async () => {
       try {
@@ -65,12 +73,11 @@ export default function Page() {
     fetchNotice();
   }, []);
 
-  // 2. 日報データをGASから取得（画面を開いた時 ＆ 担当者を切り替えた時）
+  // 2. 日報データをGASから取得
   useEffect(() => {
     const fetchReports = async () => {
       setIsReportsLoading(true);
       try {
-        // 「追加(add)」や「未選択」の場合は空文字として全データを取得
         const workerParam = (assignee === "" || assignee === "add") ? "" : assignee;
         const res = await fetch(`${GAS_URL}?worker=${encodeURIComponent(workerParam)}`);
         if (!res.ok) throw new Error();
@@ -85,7 +92,6 @@ export default function Page() {
     fetchReports();
   }, [assignee]);
 
-  // 担当者変更ハンドラー
   const handleAssigneeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     setAssignee(val);
@@ -134,7 +140,6 @@ export default function Page() {
 
       setNoticeText(draftNoticeText);
       setIsNoticeEditMode(false);
-      setActiveIndex(0);
       alert("設定を保存しました。\nこの内容は全スタッフのアプリに反映されます。");
     } catch (error) {
       alert("通信エラーが発生しました。");
@@ -143,9 +148,18 @@ export default function Page() {
     }
   };
 
-  // ==========================================
-  // 実際のデータに基づいた集計計算ロジック
-  // ==========================================
+  // ★ 追加: パネルをタップした時にURLパラメーターをつけてポップアップを開く
+  const openModal = (modalName: string) => {
+    router.push(`?modal=${modalName}`, { scroll: false });
+  };
+
+  // ★ 追加: ポップアップを閉じる（URLのパラメーターを消す）
+  const closeModal = () => {
+    router.push('/report', { scroll: false });
+    setIsNoticeEditMode(false); // 編集モードもリセット
+  };
+
+  // 集計計算ロジック
   const d = new Date();
   const currentDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const currentMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -192,7 +206,14 @@ export default function Page() {
           <div className="w-16"></div>
         </div>
 
-        <div className="mt-5 flex justify-end">
+        {/* ★ 変更: 日報送信（A-5）ボタンと担当者選択を並べる */}
+        <div className="mt-5 flex justify-between items-center gap-2">
+          
+          <Link href={`/report/submit${getQueryString()}`} className="bg-white border border-[#eaaa43] text-[#eaaa43] font-bold rounded-full px-4 py-2.5 shadow-sm active:scale-95 transition-transform flex items-center text-sm z-20 hover:bg-orange-50">
+            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            日報送信
+          </Link>
+
           <div className="bg-white border border-gray-100 rounded-full px-5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] flex items-center relative w-[160px] z-20">
             <select 
               value={assignee}
@@ -236,7 +257,7 @@ export default function Page() {
         </Link>
       </div>
 
-      {/* A-5: スワイプ式ダッシュボードエリア */}
+      {/* スワイプ式ダッシュボードエリア */}
       <div className="w-[92%] max-w-md mx-auto mb-6 z-20 relative">
         <div 
           className="overflow-hidden w-full pb-2"
@@ -249,50 +270,27 @@ export default function Page() {
             style={{ transform: `translateX(-${activeIndex * (100 / 3)}%)` }}
           >
             
-            {/* 0: お知らせ パネル */}
+            {/* 0: お知らせ パネル（★変更: クリックでポップアップを開く） */}
             <div className="w-1/3 px-1.5 h-64">
-              <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 h-full flex flex-col relative overflow-hidden">
-                
+              <div 
+                onClick={() => openModal('notice')}
+                className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 h-full flex flex-col relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+              >
                 {isLoadingNotice ? (
                   <div className="flex-1 flex items-center justify-center text-gray-400 text-sm font-bold animate-pulse">
                     情報を取得中...
                   </div>
-                ) : isNoticeEditMode ? (
-                  <div className="flex flex-col h-full animate-fade-in">
-                    <h3 className="text-[#eaaa43] font-bold text-sm tracking-widest mb-1 flex items-center">
-                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-                      お知らせの共有設定
-                    </h3>
-                    <p className="text-[9px] text-gray-400 mb-3 ml-5">※設定は全スタッフの画面に反映されます</p>
-                    
-                    <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
-                      <span className="text-xs font-bold text-gray-700">通知オン（優先表示）</span>
-                      <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${isNoticeActive ? 'bg-[#eaaa43]' : 'bg-gray-300'}`} onClick={() => setIsNoticeActive(!isNoticeActive)}>
-                        <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${isNoticeActive ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                      </div>
-                    </div>
-                    <textarea 
-                      value={draftNoticeText}
-                      onChange={(e) => setDraftNoticeText(e.target.value)}
-                      className="w-full text-xs p-3 border border-gray-200 rounded-lg outline-none focus:border-[#eaaa43] resize-none flex-1 mb-3 bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
-                      placeholder="お知らせ内容を入力..."
-                      disabled={!isNoticeActive || isSavingNotice}
-                    />
-                    <button onClick={handleSaveNotice} disabled={isSavingNotice} className={`w-full text-white font-bold py-2.5 rounded-lg active:scale-95 transition-transform text-sm disabled:bg-gray-400 ${isNoticeActive ? 'bg-[#eaaa43]' : 'bg-gray-400'}`}>
-                      {isSavingNotice ? '保存中...' : '全社員へ共有・保存'}
-                    </button>
-                  </div>
                 ) : (
-                  <div className="flex flex-col h-full animate-fade-in relative">
-                    <button onClick={() => { setIsNoticeEditMode(true); setDraftNoticeText(noticeText); }} className="absolute -top-1 -right-1 p-2 text-gray-400 hover:text-[#eaaa43] z-10">
+                  <div className="flex flex-col h-full animate-fade-in relative pointer-events-none">
+                    {/* 右上の歯車アイコン */}
+                    <div className="absolute -top-1 -right-1 p-2 text-gray-300 z-10">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                    </button>
-                    
+                    </div>
                     {isNoticeActive ? (
                       <div className="bg-[#fdf8f0] border-2 border-[#eaaa43] rounded-xl p-4 flex-1 flex flex-col justify-center items-center text-center shadow-[inset_0_0_15px_rgba(234,170,67,0.1)]">
                         <span className="text-3xl mb-2 block">📢</span>
                         <h4 className="text-[#eaaa43] font-black text-sm mb-2 tracking-widest border-b border-[#eaaa43] pb-1 inline-block">事務局よりお知らせ</h4>
-                        <p className="text-xs text-gray-800 font-bold leading-relaxed whitespace-pre-wrap">{noticeText}</p>
+                        <p className="text-xs text-gray-800 font-bold leading-relaxed whitespace-pre-wrap line-clamp-3">{noticeText}</p>
                       </div>
                     ) : (
                       <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-4 flex-1 flex flex-col justify-center items-center text-center">
@@ -305,16 +303,19 @@ export default function Page() {
               </div>
             </div>
 
-            {/* 1: たったできることパネル */}
+            {/* 1: たったできることパネル（★変更: クリックでポップアップを開く） */}
             <div className="w-1/3 px-1.5 h-64">
-              <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 h-full flex flex-col justify-center">
-                <div className="flex items-center justify-center mb-5">
+              <div 
+                onClick={() => openModal('todo')}
+                className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 h-full flex flex-col justify-center cursor-pointer active:scale-[0.98] transition-transform"
+              >
+                <div className="flex items-center justify-center mb-5 pointer-events-none">
                   <h3 className="text-gray-800 font-black text-base tracking-widest relative inline-block">
                     たったできること
                     <div className="absolute -bottom-1 left-0 w-full h-1.5 bg-[#eaaa43] opacity-30 rounded-full"></div>
                   </h3>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3 pointer-events-none">
                   <div className="bg-gray-50 border border-gray-100 rounded-xl p-2.5 flex items-center justify-center text-center h-[80px]">
                     <p className="text-[11px] font-bold text-gray-700 leading-snug">リピート率向上<br/><span className="text-[9px] text-gray-500 font-medium block mt-1 scale-90">(名札着用必須・名刺活用)</span></p>
                   </div>
@@ -331,10 +332,18 @@ export default function Page() {
               </div>
             </div>
 
-            {/* 2: リアルタイム集計パネル */}
+            {/* 2: リアルタイム集計パネル（★変更: クリックでポップアップを開く。※内部のタブ切り替えは直接できるようにしておく） */}
             <div className="w-1/3 px-1.5 h-64">
-              <div className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 h-full flex flex-col justify-center">
-                <div className="flex items-center justify-between mb-4">
+              <div 
+                onClick={(e) => {
+                  // タブボタンを押した時はポップアップを開かない
+                  if ((e.target as HTMLElement).tagName !== 'BUTTON') {
+                    openModal('summary');
+                  }
+                }}
+                className="bg-white rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.03)] p-5 h-full flex flex-col justify-center cursor-pointer active:scale-[0.98] transition-transform"
+              >
+                <div className="flex items-center justify-between mb-4 pointer-events-none">
                   <h3 className="text-[#eaaa43] font-bold text-sm tracking-widest">集計</h3>
                   <span className="text-[10px] text-gray-500 font-medium bg-gray-100 px-2 py-1 rounded-full border border-gray-200 whitespace-nowrap">
                     {assignee === "" || assignee === "add" ? "会社全体" : assignee}
@@ -342,7 +351,7 @@ export default function Page() {
                 </div>
                 
                 {isReportsLoading ? (
-                  <div className="flex-1 flex justify-center items-center text-gray-400 text-xs font-bold animate-pulse">
+                  <div className="flex-1 flex justify-center items-center text-gray-400 text-xs font-bold animate-pulse pointer-events-none">
                     計算中...
                   </div>
                 ) : (
@@ -352,7 +361,7 @@ export default function Page() {
                       <button onClick={() => setSummaryPeriod('month')} className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition-colors ${summaryPeriod === 'month' ? 'bg-white text-[#eaaa43] shadow-sm' : 'text-gray-400'}`}>当月</button>
                       <button onClick={() => setSummaryPeriod('year')} className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition-colors ${summaryPeriod === 'year' ? 'bg-white text-[#eaaa43] shadow-sm' : 'text-gray-400'}`}>年</button>
                     </div>
-                    <table className="w-full text-xs mb-4">
+                    <table className="w-full text-xs mb-4 pointer-events-none">
                       <tbody>
                         <tr className="border-b border-gray-50">
                           <td className="py-2 text-gray-500 font-medium">技術料</td>
@@ -368,7 +377,7 @@ export default function Page() {
                         </tr>
                       </tbody>
                     </table>
-                    <div>
+                    <div className="pointer-events-none">
                       <div className="flex justify-between text-[9px] font-bold mb-1">
                         <span className="text-[#547b97]">修理 {repairPercent}%</span>
                         <span className="text-gray-400 tracking-widest scale-90">構成比</span>
@@ -410,6 +419,142 @@ export default function Page() {
           </button>
         </div>
       </div>
+
+      {/* =========================================
+          ★ 追加: パネルタップ時の全画面ポップアップ（モーダル）
+          ========================================= */}
+      {activeModal && (
+        <div className="fixed inset-0 bg-[#f8f6f0] z-[100] flex flex-col animate-fade-in overflow-y-auto">
+          
+          {/* ポップアップ共通ヘッダー */}
+          <div className="sticky top-0 bg-white shadow-[0_2px_10px_rgba(0,0,0,0.05)] px-4 py-4 flex justify-between items-center z-10">
+            <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 flex items-center font-bold text-sm">
+              <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg>
+              戻る
+            </button>
+            <h2 className="text-[#eaaa43] font-black tracking-widest text-base">
+              {activeModal === 'notice' && 'お知らせ詳細'}
+              {activeModal === 'todo' && 'たったできること'}
+              {activeModal === 'summary' && '集計詳細'}
+            </h2>
+            <div className="w-16"></div> {/* バランス調整用 */}
+          </div>
+
+          {/* モーダルの中身 */}
+          <div className="p-4 max-w-md mx-auto w-full">
+            
+            {/* --- お知らせモーダル --- */}
+            {activeModal === 'notice' && (
+              <div className="bg-white rounded-[20px] shadow-sm p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <span className="text-4xl">📢</span>
+                  {/* 管理者用編集ボタン */}
+                  <button onClick={() => { setIsNoticeEditMode(true); setDraftNoticeText(noticeText); }} className="text-gray-400 hover:text-[#eaaa43] p-2 bg-gray-50 rounded-full">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                  </button>
+                </div>
+                
+                {isNoticeEditMode ? (
+                  <div className="animate-fade-in">
+                    <h3 className="text-[#eaaa43] font-bold text-base tracking-widest mb-1">お知らせの共有設定</h3>
+                    <p className="text-xs text-gray-400 mb-4">※設定は全スタッフの画面に即時反映されます</p>
+                    
+                    <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+                      <span className="text-sm font-bold text-gray-700">通知オン（優先表示）</span>
+                      <div className={`w-14 h-7 rounded-full p-1 cursor-pointer transition-colors ${isNoticeActive ? 'bg-[#eaaa43]' : 'bg-gray-300'}`} onClick={() => setIsNoticeActive(!isNoticeActive)}>
+                        <div className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform ${isNoticeActive ? 'translate-x-7' : 'translate-x-0'}`}></div>
+                      </div>
+                    </div>
+                    <textarea 
+                      value={draftNoticeText}
+                      onChange={(e) => setDraftNoticeText(e.target.value)}
+                      className="w-full text-sm p-4 border border-gray-200 rounded-xl outline-none focus:border-[#eaaa43] resize-none h-40 mb-4 bg-gray-50"
+                      placeholder="お知らせ内容を入力..."
+                      disabled={!isNoticeActive}
+                    />
+                    <button onClick={handleSaveNotice} disabled={isSavingNotice} className={`w-full text-white font-bold py-4 rounded-xl active:scale-95 transition-transform tracking-widest ${isNoticeActive ? 'bg-[#eaaa43]' : 'bg-gray-400'}`}>
+                      {isSavingNotice ? '保存中...' : '全社員へ共有・保存する'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="animate-fade-in min-h-[200px]">
+                    <h4 className="text-[#eaaa43] font-black text-lg mb-4 tracking-widest border-b-2 border-[#eaaa43]/30 pb-2 inline-block">事務局よりお知らせ</h4>
+                    <p className="text-sm text-gray-800 font-bold leading-relaxed whitespace-pre-wrap">{isNoticeActive ? noticeText : "現在、お知らせはありません"}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* --- たったできることモーダル --- */}
+            {activeModal === 'todo' && (
+              <div className="space-y-4">
+                <div className="bg-white rounded-[20px] shadow-sm p-6 border-l-4 border-[#eaaa43]">
+                  <h3 className="font-black text-gray-800 text-lg mb-2">1. リピート率向上</h3>
+                  <p className="text-sm text-gray-600 font-medium leading-relaxed">名札の着用は必須です。訪問時には必ず名刺をお渡しし、お客様に顔と名前を覚えてもらいましょう。小さな信頼の積み重ねが次のお仕事に繋がります。</p>
+                </div>
+                <div className="bg-white rounded-[20px] shadow-sm p-6 border-l-4 border-blue-400">
+                  <h3 className="font-black text-gray-800 text-lg mb-2">2. 緊急時の案内</h3>
+                  <p className="text-sm text-gray-600 font-medium leading-relaxed">水漏れなどの緊急時には、まずお客様に「止水栓」や「水道メーター」の位置をお伝えし、応急処置ができるように案内してください。</p>
+                </div>
+                <div className="bg-white rounded-[20px] shadow-sm p-6 border-l-4 border-green-400">
+                  <h3 className="font-black text-gray-800 text-lg mb-2">3. インターフォン越しの名札提示</h3>
+                  <p className="text-sm text-gray-600 font-medium leading-relaxed">防犯意識が高まっています。インターフォンを押す際は、カメラに向かって名札をはっきりと提示し、身分と目的を明るく伝えましょう。</p>
+                </div>
+                <div className="bg-white rounded-[20px] shadow-sm p-6 border-l-4 border-purple-400">
+                  <h3 className="font-black text-gray-800 text-lg mb-2">4. 訪問前日在宅確認</h3>
+                  <p className="text-sm text-gray-600 font-medium leading-relaxed">ご依頼から1週間以上経過している案件については、すれ違いを防ぐため、必ず訪問の前日にお客様へ在宅確認の連絡を入れてください。</p>
+                </div>
+              </div>
+            )}
+
+            {/* --- 集計詳細モーダル --- */}
+            {activeModal === 'summary' && (
+              <div className="bg-white rounded-[20px] shadow-sm p-6">
+                <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+                  <h3 className="font-black text-gray-800 text-lg tracking-widest">売上詳細レポート</h3>
+                  <span className="text-xs text-[#eaaa43] font-bold bg-orange-50 px-3 py-1 rounded-full border border-orange-100">
+                    {assignee === "" || assignee === "add" ? "会社全体" : assignee}
+                  </span>
+                </div>
+                
+                <div className="flex gap-2 mb-6 bg-gray-50 p-1.5 rounded-xl">
+                  <button onClick={() => setSummaryPeriod('day')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${summaryPeriod === 'day' ? 'bg-white text-[#eaaa43] shadow-sm' : 'text-gray-400'}`}>当日</button>
+                  <button onClick={() => setSummaryPeriod('month')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${summaryPeriod === 'month' ? 'bg-white text-[#eaaa43] shadow-sm' : 'text-gray-400'}`}>当月</button>
+                  <button onClick={() => setSummaryPeriod('year')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${summaryPeriod === 'year' ? 'bg-white text-[#eaaa43] shadow-sm' : 'text-gray-400'}`}>年</button>
+                </div>
+
+                <div className="space-y-4 mb-8">
+                  <div className="bg-gray-50 rounded-xl p-4 flex justify-between items-center">
+                    <span className="text-gray-500 font-bold">技術料</span>
+                    <span className="text-xl font-black text-gray-800"><span className="text-sm font-normal mr-1 text-gray-400">¥</span>{techSum.toLocaleString()}</span>
+                  </div>
+                  <div className="bg-[#547b97]/5 rounded-xl p-4 flex justify-between items-center border border-[#547b97]/10">
+                    <span className="text-[#547b97] font-bold">修理合計</span>
+                    <span className="text-xl font-black text-[#547b97]"><span className="text-sm font-normal mr-1">¥</span>{repairSum.toLocaleString()}</span>
+                  </div>
+                  <div className="bg-[#d98c77]/5 rounded-xl p-4 flex justify-between items-center border border-[#d98c77]/10">
+                    <span className="text-[#d98c77] font-bold">販売金額</span>
+                    <span className="text-xl font-black text-[#d98c77]"><span className="text-sm font-normal mr-1">¥</span>{salesSum.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                  <h4 className="text-xs font-bold text-gray-400 text-center mb-3 tracking-widest">売上構成比</h4>
+                  <div className="flex justify-between text-sm font-black mb-2 px-1">
+                    <span className="text-[#547b97]">修理 {repairPercent}%</span>
+                    <span className="text-[#d98c77]">販売 {salesPercent}%</span>
+                  </div>
+                  <div className="flex w-full h-4 rounded-full overflow-hidden bg-gray-100">
+                    <div className="bg-[#547b97] transition-all duration-500" style={{ width: `${repairPercent}%` }}></div>
+                    <div className="bg-[#d98c77] transition-all duration-500" style={{ width: `${salesPercent}%` }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
 
       {/* 画面下のタブバー */}
       <div className="fixed bottom-0 left-0 right-0 w-full bg-white rounded-t-[30px] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] h-[70px] flex justify-around items-center px-4 max-w-md mx-auto pb-2 z-50">
