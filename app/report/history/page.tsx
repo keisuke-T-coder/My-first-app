@@ -75,8 +75,8 @@ function HistoryList() {
   const [error, setError] = useState("");
 
   // ★ 2段階アコーディオン用のステート
-  const [expandedDate, setExpandedDate] = useState<string | null>(null); // 開いている日付
-  const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null); // 開いている案件の詳細
+  const [expandedDate, setExpandedDate] = useState<string | null>(null); 
+  const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null); 
 
   // 編集モード用のステート
   const [editingItem, setEditingItem] = useState<any | null>(null);
@@ -131,11 +131,21 @@ function HistoryList() {
     });
   });
 
-  // 月全体のサマリー計算
-  const totalCount = Object.values(groupedData).flat().length;
-  const totalTech = Object.values(groupedData).flat().reduce((sum, item) => sum + (Number(item.技術料) || 0), 0);
-  const totalRepair = Object.values(groupedData).flat().reduce((sum, item) => sum + (Number(item.修理金額) || 0), 0);
-  const totalSales = Object.values(groupedData).flat().reduce((sum, item) => sum + (Number(item.販売金額) || 0), 0);
+  // 月全体のサマリー計算（厳格な文法に対応）
+  let totalCount = 0;
+  let totalTech = 0;
+  let totalRepair = 0;
+  let totalSales = 0;
+
+  Object.values(groupedData).forEach(dayItems => {
+    totalCount += dayItems.length;
+    dayItems.forEach(item => {
+      totalTech += (Number(item.技術料) || 0);
+      totalRepair += (Number(item.修理金額) || 0);
+      totalSales += (Number(item.販売金額) || 0);
+    });
+  });
+
   const selectedMonthDisplay = selectedMonth.replace('-', '年') + '月';
 
   // --- 編集用ハンドラー ---
@@ -284,7 +294,6 @@ function HistoryList() {
             const dayItems = groupedData[dateStr];
             const isDateExpanded = expandedDate === dateStr;
             
-            // その日の合計計算
             const dayTech = dayItems.reduce((s, i) => s + (Number(i.技術料) || 0), 0);
             const dayRepair = dayItems.reduce((s, i) => s + (Number(i.修理金額) || 0), 0);
             const daySales = dayItems.reduce((s, i) => s + (Number(i.販売金額) || 0), 0);
@@ -653,6 +662,19 @@ function HistoryList() {
           </form>
         </div>
       )}
+
+    </div>
+  );
+}
+
+// --- メインページ（Suspenseラップ） ---
+// ★ 修正：Next.jsの厳格なPageコンポーネントの型に合わせるため、名前を Page に変更し props を許可
+export default function Page(props: any) {
+  return (
+    <div className="min-h-screen bg-[#f8f6f0] font-sans text-slate-800 pb-32">
+      <Suspense fallback={<div className="flex justify-center items-center h-screen text-gray-500 font-bold">画面を読み込んでいます...</div>}>
+        <HistoryList />
+      </Suspense>
 
       {/* 画面下のタブバー */}
       <div className="fixed bottom-0 left-0 right-0 w-full bg-white rounded-t-[30px] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] h-[70px] flex justify-around items-center px-4 max-w-md mx-auto pb-2 z-40">
