@@ -36,6 +36,7 @@ function ReportForm() {
     エリア: '',
     クライアント: '',
     品目: '',
+    品番: '', // ★ 追加: 品番
     依頼内容: '',
     作業内容: '',
     作業区分: '修理',
@@ -57,25 +58,29 @@ function ReportForm() {
 
   const handleStartTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const startTime = e.target.value;
-    let endTime = formData.終了時間;
-
-    if (startTime && !endTime) {
+    
+    // ★ 変更: 開始時間が変更されたら、常に60分後を計算して終了時間にセットする
+    if (startTime) {
       const [hours, minutes] = startTime.split(':').map(Number);
-      let endMinutes = minutes + 30;
-      let endHours = hours;
+      // 60分足す（時間は+1、分はそのまま）
+      let endHours = (hours + 1) % 24;
+      let endMinutes = minutes;
       
-      if (endMinutes >= 60) {
-        endHours = (hours + 1) % 24;
-        endMinutes = endMinutes - 60;
-      }
-      endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+      const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+      setFormData({ ...formData, 開始時間: startTime, 終了時間: endTime });
+    } else {
+      setFormData({ ...formData, 開始時間: startTime });
     }
-    setFormData({ ...formData, 開始時間: startTime, 終了時間: endTime });
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    // ★ 追加: 品目がトイレ以外に変わった場合、品番をクリアする配慮
+    if (name === '品目' && value !== 'トイレ') {
+      setFormData({ ...formData, [name]: value, 品番: '' });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   const handleToggle = (name: string, value: string) => {
@@ -105,6 +110,7 @@ function ReportForm() {
       エリア: formData.エリア,
       クライアント: formData.クライアント,
       品目: formData.品目,
+      品番: formData.品目 === 'トイレ' ? formData.品番 : '', // ★ 追加: トイレの時だけ品番を送る
       依頼内容: formData.依頼内容,
       作業内容: formData.作業内容,
       作業区分: formData.作業区分,
@@ -120,7 +126,6 @@ function ReportForm() {
     };
 
     try {
-      // ★ 最強の回避策：データを「URLパラメータ形式」に変換して送る
       const formBody = new URLSearchParams();
       formBody.append('data', JSON.stringify(payload));
 
@@ -143,6 +148,7 @@ function ReportForm() {
         エリア: '',
         クライアント: '',
         品目: '',
+        品番: '', // ★ 追加: 送信後にリセット
         依頼内容: '',
         作業内容: '',
         技術料: '0',
@@ -157,7 +163,6 @@ function ReportForm() {
       });
 
     } catch (error) {
-      // エラーの正体を画面に表示させる
       const errorMessage = error instanceof Error ? error.message : "不明なエラー";
       setSubmitMessage(`通信エラー: ${errorMessage}`);
       setShowConfirm(false);
@@ -264,6 +269,15 @@ function ReportForm() {
                 </select>
               </div>
             </div>
+            
+            {/* ★ 追加: 品目がトイレの時だけ出現する「品番」入力欄 */}
+            {formData.品目 === 'トイレ' && (
+              <div className="animate-fade-in bg-orange-50/50 p-3 rounded-xl border border-orange-100">
+                <label className={`${labelClass} text-orange-600`}>品番（※トイレ選択時）</label>
+                <input type="text" name="品番" value={formData.品番} onChange={handleChange} placeholder="例: DT-1234" className={`${inputBaseClass} bg-white`} />
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div className={selectWrapperClass}>
                 <label className={labelClass}>依頼内容</label>
@@ -431,7 +445,10 @@ function ReportForm() {
               </div>
               <div className="grid grid-cols-3 border-b border-gray-200 pb-2">
                 <span className="text-gray-500 text-xs">作業概要</span>
-                <span className="col-span-2 text-right">{formData.品目} / {formData.依頼内容} / {formData.作業内容}</span>
+                {/* ★ 追加: 品番の確認表示 */}
+                <span className="col-span-2 text-right">
+                  {formData.品目} {formData.品目 === 'トイレ' && formData.品番 ? `(品番: ${formData.品番})` : ''} / {formData.依頼内容} / {formData.作業内容}
+                </span>
               </div>
               <div className="grid grid-cols-3 border-b border-gray-200 pb-2">
                 <span className="text-gray-500 text-xs">金額 ({formData.作業区分})</span>
