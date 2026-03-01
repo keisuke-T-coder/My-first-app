@@ -23,7 +23,7 @@ function getTodayString() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// 時間フォーマット（「1899-12-29T15:03...」などを綺麗に修正）
+// 時間フォーマット
 function formatTime(timeStr: string) {
   if (!timeStr) return "未定";
   if (/^\d{1,2}:\d{2}$/.test(timeStr)) return timeStr;
@@ -45,8 +45,6 @@ function SubmitReportContent() {
 
   const [todayReports, setTodayReports] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // ★ 追加: 送信完了ポップアップの状態管理
   const [showCompletionModal, setShowCompletionModal] = useState(false);
 
   const isInvalidWorker = !worker || worker === "add";
@@ -81,15 +79,21 @@ function SubmitReportContent() {
 
   todayReports.forEach(r => {
     totalTechFee += Number(r.技術料) || 0;
+    // 「計」は修理金額と販売金額の合計
     totalAmount += (Number(r.修理金額) || 0) + (Number(r.販売金額) || 0);
   });
 
-  // ★ 追加: 送信完了ボタンを押した時の処理
+  // ★ 追加: 取得したレポートを「開始時間」で時系列（昇順）に並び替える
+  const sortedReports = [...todayReports].sort((a, b) => {
+    const timeA = a.開始時間 ? formatTime(a.開始時間) : "99:99"; // 時間未定は一番下へ
+    const timeB = b.開始時間 ? formatTime(b.開始時間) : "99:99";
+    return timeA.localeCompare(timeB);
+  });
+
   const handleComplete = () => {
     setShowCompletionModal(true);
   };
 
-  // ★ 追加: ポップアップの「確認」を押してトップへ戻る処理
   const handleReturnToTop = () => {
     setShowCompletionModal(false);
     router.push('/report');
@@ -137,8 +141,8 @@ function SubmitReportContent() {
         </button>
       </div>
 
-      {/* 👑 ★変更: 極限までスリム化したヘッダー */}
-      <div className="bg-gradient-to-r from-[#eaaa43] to-[#d4952b] rounded-[14px] p-2.5 shadow-md text-white flex justify-between items-center">
+      {/* 👑 ヘッダー */}
+      <div className="bg-gradient-to-r from-[#eaaa43] to-[#d4952b] rounded-[14px] p-2.5 shadow-md text-white flex justify-between items-center z-10">
         <div>
           <div className="flex items-center gap-1.5 mb-1">
             <span className="text-[9px] font-bold bg-white/20 px-1.5 py-[2px] rounded shadow-inner backdrop-blur-sm">
@@ -149,7 +153,7 @@ function SubmitReportContent() {
             </span>
           </div>
           <div className="text-[10px] font-medium drop-shadow-sm leading-none mt-1.5">
-            完了件数: <span className="text-[15px] font-black">{todayReports.length}</span> 件
+            完了件数: <span className="text-[15px] font-black">{sortedReports.length}</span> 件
           </div>
         </div>
         <div className="text-right">
@@ -160,17 +164,17 @@ function SubmitReportContent() {
         </div>
       </div>
 
-      {/* 📋 ★変更: 12件収納を目指す超圧縮・リッチデザインのリスト */}
-      <div className="flex-1 bg-white rounded-[14px] shadow-sm border border-gray-100 mt-2 p-1 overflow-hidden flex flex-col relative">
+      {/* 📋 リスト部分 */}
+      <div className="flex-1 bg-white rounded-[14px] shadow-sm border border-gray-100 mt-2 p-1 overflow-hidden flex flex-col relative z-0">
         
         {/* テーブルヘッダー */}
-        <div className="flex text-[9px] text-gray-400 font-bold border-b border-gray-100 pb-1 pt-0.5 mb-0.5 px-1">
+        <div className="flex text-[9px] text-gray-400 font-bold border-b border-gray-100 pb-1 pt-0.5 mb-1 px-1">
           <div className="w-[35px] text-center">時間</div>
           <div className="flex-1 pl-1">訪問先 / 内容</div>
           <div className="w-[50px] text-right">技術/計</div>
         </div>
 
-        {todayReports.length === 0 && (
+        {sortedReports.length === 0 && (
           <div className="flex-1 flex items-center justify-center flex-col text-gray-400 py-10">
             <span className="text-3xl mb-2 block opacity-30">📄</span>
             <p className="text-xs font-bold">本日の提出データはありません</p>
@@ -178,53 +182,78 @@ function SubmitReportContent() {
         )}
 
         {/* データ一覧 */}
-        {todayReports.map((r, index) => (
-          <div key={index} className="flex items-center py-1 border-b border-gray-50 relative bg-white hover:bg-gray-50">
-            
-            {/* ★ リッチデザイン: 左端のアクセントカラーバー（修理は青系、販売は赤系） */}
-            <div className={`absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full ${r.作業区分 === '販売' ? 'bg-[#d98c77]' : 'bg-[#547b97]'}`}></div>
-            
-            {/* 時間 */}
-            <div className="w-[35px] text-[9px] text-gray-500 text-center font-bold leading-[1.1] pl-1">
-              {formatTime(r.開始時間)}<br/>
-              <span className="text-gray-400 text-[8px]">{formatTime(r.終了時間)}</span>
-            </div>
-            
-            {/* 内容 */}
-            <div className="flex-1 pl-1.5 pr-1 overflow-hidden">
-              <div className="flex items-center gap-1 mb-[1px]">
-                <span className="text-[11px] font-black text-gray-800 truncate leading-none pt-0.5">{r.訪問先}</span>
-                <span className="text-[7.5px] text-gray-400 font-bold border border-gray-200 rounded px-1 leading-none py-[2px] whitespace-nowrap bg-gray-50">
-                  {/* 「エリア」という文字を削って幅を節約 */}
-                  {r.エリア?.replace('エリア', '') || ''}
-                </span>
-              </div>
-              <div className="text-[8.5px] text-gray-500 truncate leading-none mt-[2px]">
-                {r.品目} {r.品番 ? `(${r.品番})` : ''} / {r.依頼内容}
-              </div>
-              
-              {/* 伝票番号 */}
-              {r.遠隔高速利用 === '有' && r.伝票番号 && (
-                <div className="text-[7.5px] text-white font-bold mt-[3px] bg-red-500 px-1 py-[1.5px] rounded-[2px] inline-block shadow-sm leading-none">
-                  伝: {r.伝票番号}
-                </div>
-              )}
-            </div>
-            
-            {/* 金額 */}
-            <div className="w-[50px] text-right flex flex-col justify-center pr-1">
-              <div className="text-[8px] text-gray-400 font-bold leading-[1.1] mb-[1px]">¥{Number(r.技術料).toLocaleString()}</div>
-              <div className={`text-[10px] font-black leading-[1.1] ${r.作業区分 === '販売' ? 'text-[#d98c77]' : 'text-[#547b97]'}`}>
-                ¥{(Number(r.修理金額) + Number(r.販売金額)).toLocaleString()}
-              </div>
-            </div>
+        {sortedReports.map((r, index) => {
+          // ★ 追加: 成約（販売）と遠隔の判定
+          const isSale = r.作業区分 === '販売';
+          const isRemote = r.遠隔高速利用 === '有';
 
-          </div>
-        ))}
+          // 枠線のスタイルを決定
+          const wrapperClass = isSale 
+            ? "bg-gradient-to-r from-pink-400 via-yellow-400 to-blue-400 p-[1.5px] shadow-sm" // 虹色枠
+            : isRemote 
+            ? "bg-blue-400 p-[1.5px] shadow-sm" // 青色枠
+            : "border-b border-gray-100"; // 通常の線
+
+          const innerClass = (isSale || isRemote) ? "bg-white rounded-[4px]" : "bg-transparent";
+
+          return (
+            <div key={index} className={`mb-[3px] rounded-[6px] ${wrapperClass}`}>
+              <div className={`flex items-start py-1 px-1 ${innerClass}`}>
+                
+                {/* 時間 */}
+                <div className="w-[35px] text-[9px] text-gray-500 text-center font-bold leading-[1.1] pt-0.5">
+                  {formatTime(r.開始時間)}<br/>
+                  <span className="text-gray-400 text-[8px]">{formatTime(r.終了時間)}</span>
+                </div>
+                
+                {/* 内容 */}
+                <div className="flex-1 pl-1.5 pr-1 overflow-hidden">
+                  <div className="flex items-center gap-1 mb-[2px]">
+                    <span className="text-[11px] font-black text-gray-800 truncate leading-none pt-0.5">{r.訪問先}</span>
+                    <span className="text-[7.5px] text-gray-400 font-bold border border-gray-200 rounded px-1 leading-none py-[2px] whitespace-nowrap bg-gray-50">
+                      {r.エリア?.replace('エリア', '') || ''}
+                    </span>
+                  </div>
+                  <div className="text-[8.5px] text-gray-500 truncate leading-none mb-1">
+                    {r.品目} {r.品番 ? `(${r.品番})` : ''} / {r.依頼内容}
+                  </div>
+                  
+                  {/* ★ 追加: バッジエリア */}
+                  <div className="flex flex-wrap gap-1 mt-[2px]">
+                    {isSale && (
+                      <span className="text-[7.5px] text-white font-bold bg-gradient-to-r from-pink-400 via-yellow-400 to-blue-400 px-1 py-[1.5px] rounded-[2px] leading-none shadow-sm">
+                        成約
+                      </span>
+                    )}
+                    {isRemote && (
+                      <span className="text-[7.5px] text-white font-bold bg-blue-500 px-1 py-[1.5px] rounded-[2px] leading-none shadow-sm">
+                        遠隔
+                      </span>
+                    )}
+                    {isRemote && r.伝票番号 && (
+                      <span className="text-[7.5px] text-red-500 font-bold border border-red-200 bg-red-50 px-1 py-[1px] rounded-[2px] leading-none shadow-sm">
+                        伝: {r.伝票番号}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* 金額 */}
+                <div className="w-[50px] text-right flex flex-col justify-center pr-1 pt-0.5">
+                  <div className="text-[8px] text-gray-400 font-bold leading-[1.1] mb-[1px]">¥{Number(r.技術料).toLocaleString()}</div>
+                  <div className={`text-[10px] font-black leading-[1.1] ${isSale ? 'text-[#d98c77]' : 'text-[#547b97]'}`}>
+                    ¥{(Number(r.修理金額) + Number(r.販売金額)).toLocaleString()}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* 📸 スクショ案内 ＆ ★変更: ポップアップを呼び出す送信ボタン */}
-      <div className="mt-2 flex flex-col items-center">
+      {/* 📸 送信ボタン */}
+      <div className="mt-2 flex flex-col items-center z-10">
         <p className="text-[9px] text-gray-400 font-bold mb-1.5">
           👆 この画面をスクリーンショットして管理者に送信してください
         </p>
@@ -238,14 +267,14 @@ function SubmitReportContent() {
       </div>
 
       {/* =========================================
-          ★ 追加: 「お疲れ様でした！」ポップアップ
+          お疲れ様でした！ポップアップ
           ========================================= */}
       {showCompletionModal && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-[24px] w-full max-w-sm p-8 flex flex-col items-center text-center shadow-2xl transform transition-all scale-100">
             
             {/* アニメーション付きのアイコン */}
-            <div className="text-6xl mb-4 animate-bounce">
+            <div className="text-6xl mb-4 animate-bounce drop-shadow-sm">
               🎉
             </div>
             
