@@ -2,7 +2,6 @@
 
 import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
-// ★ 変更: 画面遷移のために useRouter を追加
 import { useSearchParams, useRouter } from 'next/navigation';
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyi3gbullz4u0EqXBkhMVxiqfZq0-PKdhim9QVrSyl1q4SvBaS46GX5lzsyZrAu5j8u2A/exec';
@@ -26,7 +25,6 @@ function getTodayString() {
 
 function ReportForm() {
   const searchParams = useSearchParams();
-  // ★ 追加: 画面移動用のルーターを取得
   const router = useRouter();
   const defaultWorker = searchParams.get('worker') || ""; 
 
@@ -56,7 +54,6 @@ function ReportForm() {
   });
 
   const [showConfirm, setShowConfirm] = useState(false);
-  // ★ 追加: 送信成功ポップアップの表示・非表示を管理
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
@@ -139,7 +136,6 @@ function ReportForm() {
         body: formBody,
       });
 
-      // ★ 変更: 成功時はポップアップを表示し、確認モーダルを閉じる
       setShowConfirm(false);
       setShowSuccessModal(true);
       
@@ -172,6 +168,12 @@ function ReportForm() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // ★ 追加: 「続けて入力する」ボタンを押したときの処理（一番上へスクロール）
+  const handleContinueInput = () => {
+    setShowSuccessModal(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const inputBaseClass = "w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-base text-gray-800 focus:outline-none focus:border-[#eaaa43] focus:ring-1 focus:ring-[#eaaa43] transition-all appearance-none";
@@ -417,7 +419,7 @@ function ReportForm() {
         </button>
       </form>
 
-      {/* 既存の確認モーダル */}
+      {/* 確認モーダル */}
       {showConfirm && (
         <div className="fixed inset-0 bg-black/40 z-[100] flex items-center justify-center p-4">
           <div className="bg-[#f8f6f0] rounded-[20px] w-full max-w-md max-h-[85vh] overflow-y-auto shadow-xl flex flex-col">
@@ -485,12 +487,11 @@ function ReportForm() {
         </div>
       )}
 
-      {/* ★ 追加: 送信完了後の成功ポップアップ（モーダル） */}
+      {/* 送信完了後の成功ポップアップ（モーダル） */}
       {showSuccessModal && (
         <div className="fixed inset-0 bg-black/50 z-[120] flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-[24px] w-full max-w-sm p-8 flex flex-col items-center text-center shadow-2xl transform transition-all scale-100">
             
-            {/* アニメーション付きのサクセスアイコン */}
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6 animate-bounce">
               <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
@@ -502,17 +503,18 @@ function ReportForm() {
               日報データが正常に保存されました。<br/>続けて次の案件を入力しますか？
             </p>
 
-            {/* 選択肢ボタン */}
             <div className="w-full flex flex-col gap-3">
+              {/* ★ 変更: クリック時に一番上へスクロール */}
               <button 
-                onClick={() => setShowSuccessModal(false)} 
+                onClick={handleContinueInput} 
                 className="w-full bg-[#eaaa43] text-white py-3.5 rounded-xl font-bold tracking-widest active:scale-95 transition-transform shadow-md"
               >
                 続けて入力する
               </button>
               
+              {/* ★ 変更: URLのクエリパラメータに今の担当者を付けて遷移 */}
               <button 
-                onClick={() => router.push('/report/list')} 
+                onClick={() => router.push(`/report/list?worker=${encodeURIComponent(formData.担当者)}`)} 
                 className="w-full bg-gray-100 text-gray-600 py-3.5 rounded-xl font-bold tracking-widest active:scale-95 transition-transform"
               >
                 当日一覧（A-2）を確認
