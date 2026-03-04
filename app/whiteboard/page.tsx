@@ -38,6 +38,13 @@ function formatDateDisplay(date: Date) {
   return `${date.getMonth() + 1}月${date.getDate()}日(${days[date.getDay()]})`;
 }
 
+// 時間を分に変換するヘルパー関数
+const parseMins = (t: string) => {
+  if(!t) return 0;
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+
 function WhiteboardContent() {
   const [mounted, setMounted] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -83,7 +90,6 @@ function WhiteboardContent() {
       try { noticesData = await noticesRes.json(); } catch(e) { console.error("お知らせパースエラー", e); }
 
       const parsedSchedules = data.map((row: any) => {
-        // ★ 修正点2：既存データ（A0日報）のフォールバック（救済）
         let locDetail = row.訪問先 || "(場所未入力)";
         let wItem = row.品目 || row.作業内容 || "未定";
         let wItemDet = "";
@@ -97,7 +103,6 @@ function WhiteboardContent() {
           absType = absenceMatch[1].trim();
         }
 
-        // WB専用のメモタグがあればそれで上書きする
         const match = memo.match(/【WB予定】場所:(.*?) \/ 品目:(.*?)(?:\n|$)/);
         if (match) {
           locDetail = match[1].trim();
@@ -118,6 +123,7 @@ function WhiteboardContent() {
         }
 
         return {
+          ...row, // 元の全データ保持（エリア等のため）
           タイムスタンプ: row.タイムスタンプ || "",
           日付: row.日付 || "", 担当者: row.担当者 || "", 開始時間: startTimeStr, 終了時間: endTimeStr, 訪問先: row.訪問先 || "", 依頼内容: row.依頼内容 || "", 作業内容: row.作業内容 || "", メモ: row.メモ || "", locationDetail: locDetail, wbItem: wItem, wbItemDetail: wItemDet, isAbsence, absenceType: absType
         };
@@ -192,6 +198,18 @@ function WhiteboardContent() {
     } else setFormData({ ...formData, 開始時間: start });
   };
 
+  // ★ 休みモード切り替え時の時間自動セット
+  const handleAbsenceModeSwitch = (mode: boolean) => {
+    setIsAbsenceMode(mode);
+    if (mode) {
+      const type = formData.absenceType || "1日休み";
+      let start = "08:00"; let end = "17:00";
+      if (type === "午前休") { end = "12:00"; }
+      else if (type === "午後休") { start = "13:00"; }
+      setFormData(prev => ({ ...prev, absenceType: type, 開始時間: start, 終了時間: end }));
+    }
+  };
+
   const handleAbsenceTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const type = e.target.value;
     let start = "08:00"; let end = "17:00";
@@ -200,7 +218,8 @@ function WhiteboardContent() {
     setFormData(prev => ({ ...prev, absenceType: type, 開始時間: start, 終了時間: end }));
   };
 
-  const openDetail = (schedule: any) => {
+  const openDetail = (schedule: any, e: React.MouseEvent) => {
+    e.stopPropagation(); // キャンバスへのクリックを防止
     setSelectedSchedule(schedule);
     setIsDetailOpen(true);
   };
@@ -209,6 +228,23 @@ function WhiteboardContent() {
     setIsAbsenceMode(false);
     setFormData(prev => ({
       ...prev, タイムスタンプ: '', 日付: dateString, 担当者: currentUser || assignees[0], 開始時間: '', 終了時間: '', 訪問先: '', locationDetail: '', wbItem: '', wbItemDetail: '', エリア: '', 依頼内容: '', 作業内容: '', メモ: '', absenceType: '1日休み'
+    }));
+    setIsFormOpen(true);
+  };
+
+  // ★ 空欄タップ時の新規作成オープン
+  const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>, staff: string, targetDateStr: string) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetY = e.clientY - rect.top;
+    const clickedHour = Math.floor(offsetY / HOUR_HEIGHT) + START_HOUR;
+    const validHour = Math.min(Math.max(clickedHour, START_HOUR), END_HOUR);
+    
+    const startStr = `${String(validHour).padStart(2, '0')}:00`;
+    const endStr = `${String(validHour + 1).padStart(2, '0')}:00`;
+
+    setIsAbsenceMode(false);
+    setFormData(prev => ({
+      ...prev, タイムスタンプ: '', 日付: targetDateStr, 担当者: staff, 開始時間: startStr, 終了時間: endStr, 訪問先: '', locationDetail: '', wbItem: '', wbItemDetail: '', エリア: '', 依頼内容: '', 作業内容: '', メモ: '', absenceType: '1日休み'
     }));
     setIsFormOpen(true);
   };
@@ -308,19 +344,33 @@ function WhiteboardContent() {
   const inputBaseClass = "w-full bg-white border border-gray-300 rounded-[10px] px-3 py-2.5 text-[16px] text-gray-800 focus:outline-none focus:border-[#eaaa43] transition-all appearance-none";
   const selectWrapperClass = "relative after:content-['▼'] after:text-gray-400 after:text-[10px] after:absolute after:right-3 after:top-1/2 after:-translate-y-1/2 after:pointer-events-none";
 
-  const calculateCardStyle = (start: string, end: string) => {
-    const parseMins = (t: string) => {
-      if(!t) return 0;
-      const [h, m] = t.split(':').map(Number);
-      return h * 60 + m;
-    };
-    const startMins = parseMins(start) - (START_HOUR * 60);
-    const endMins = parseMins(end) - (START_HOUR * 60);
-    const topPx = (startMins / 60) * HOUR_HEIGHT;
-    let heightPx = ((endMins - startMins) / 60) * HOUR_HEIGHT;
-    heightPx = Math.max(heightPx, MIN_BLOCK_HEIGHT); 
+  // ★ 予定の被りを計算し、幅と位置を割り当てる関数（スプリット表示用）
+  const processOverlaps = (staffSchedules: any[]) => {
+    const parsed = staffSchedules.map(s => ({ ...s, startMins: parseMins(s.開始時間), endMins: parseMins(s.終了時間) }))
+                                 .sort((a, b) => a.startMins - b.startMins);
+    const columns: any[][] = [];
+    parsed.forEach(s => {
+      let placed = false;
+      for(let i=0; i<columns.length; i++){
+        if(s.startMins >= columns[i][columns[i].length-1].endMins) {
+          columns[i].push(s);
+          placed = true;
+          break;
+        }
+      }
+      if(!placed) columns.push([s]);
+    });
     
-    return { top: `${Math.max(0, topPx)}px`, height: `${heightPx}px` };
+    const numCols = columns.length || 1;
+    const width = 94 / numCols; 
+    
+    columns.forEach((col, i) => {
+      col.forEach(s => {
+        s.computedLeft = 3 + (i * width);
+        s.computedWidth = width;
+      });
+    });
+    return parsed;
   };
 
   const NoticeBanner = ({ targetDateStr }: { targetDateStr: string }) => {
@@ -358,34 +408,43 @@ function WhiteboardContent() {
     const daySchedules = schedules.filter(s => s.日付 === targetDateStr);
 
     return (
-      // ★ 修正点1：h-fullをやめて絶対値の高さを持たせることで圧縮を防ぐ
       <div className="relative w-full bg-white pb-[40px]" style={{ height: `${(END_HOUR - START_HOUR + 1) * HOUR_HEIGHT}px`, minHeight: `${(END_HOUR - START_HOUR + 1) * HOUR_HEIGHT}px` }}>
         <div className="absolute inset-0 pointer-events-none z-0 flex flex-col">
           {hours.map(h => (
-            // ★ 修正点1：shrink-0 を追加して目盛りが潰れるのを防ぐ
             <div key={h} className="w-full border-t border-gray-100 flex items-start shrink-0" style={{ height: `${HOUR_HEIGHT}px` }}>
               <span className="text-[9px] text-gray-400 font-bold pl-1 -mt-1.5 bg-white pr-1">{h}:00</span>
             </div>
           ))}
         </div>
         
-        <div className="relative z-10 flex w-full pl-[36px] h-full">
+        <div className="relative z-10 flex w-full pl-[36px] h-full cursor-pointer">
           {assignees.map(staff => {
-            const staffSchedules = daySchedules.filter(s => s.担当者 === staff);
+            // ★ スプリット表示のために processOverlaps を通す
+            const staffSchedules = processOverlaps(daySchedules.filter(s => s.担当者 === staff));
             const style = staffStyles[staff];
             return (
-              <div key={staff} className="flex-1 border-r border-gray-50 relative min-w-[50px]">
+              <div key={staff} 
+                   className="flex-1 border-r border-gray-50 relative min-w-[50px] hover:bg-gray-50/50 transition-colors"
+                   onClick={(e) => handleCanvasClick(e, staff, targetDateStr)}> {/* ★ 空欄タップで新規作成 */}
+                
                 {staffSchedules.map((schedule, idx) => {
-                  const pos = calculateCardStyle(schedule.開始時間, schedule.終了時間);
+                  const startMins = schedule.startMins - (START_HOUR * 60);
+                  const endMins = schedule.endMins - (START_HOUR * 60);
+                  const topPx = (startMins / 60) * HOUR_HEIGHT;
+                  let heightPx = ((endMins - startMins) / 60) * HOUR_HEIGHT;
+                  heightPx = Math.max(heightPx, MIN_BLOCK_HEIGHT); 
+
                   if (schedule.isAbsence) {
                     return (
-                      <div key={schedule.タイムスタンプ || idx} onClick={() => openDetail(schedule)} className="absolute w-[94%] left-[3%] bg-red-500 rounded-[4px] shadow-sm cursor-pointer active:scale-95 transition-transform flex flex-col justify-center items-center overflow-hidden border border-red-600 z-20" style={pos}>
+                      <div key={schedule.タイムスタンプ || idx} onClick={(e) => openDetail(schedule, e)} className="absolute bg-red-500 rounded-[4px] shadow-sm cursor-pointer active:scale-95 transition-transform flex flex-col justify-center items-center overflow-hidden border border-red-600 z-20" 
+                           style={{ top: `${Math.max(0, topPx)}px`, height: `${heightPx}px`, left: `${schedule.computedLeft}%`, width: `${schedule.computedWidth}%` }}>
                         <span className="text-white font-black text-[10px] writing-vertical-rl">{schedule.absenceType}</span>
                       </div>
                     );
                   }
                   return (
-                    <div key={schedule.タイムスタンプ || idx} onClick={() => openDetail(schedule)} className={`absolute w-[94%] left-[3%] bg-white rounded-[6px] shadow-md border ${style.border} border-l-[4px] cursor-pointer active:scale-95 transition-transform flex flex-col overflow-hidden p-1 z-20 leading-tight`} style={pos}>
+                    <div key={schedule.タイムスタンプ || idx} onClick={(e) => openDetail(schedule, e)} className={`absolute bg-white rounded-[6px] shadow-md border ${style.border} border-l-[4px] cursor-pointer active:scale-95 transition-transform flex flex-col overflow-hidden p-1 z-20 leading-tight`} 
+                         style={{ top: `${Math.max(0, topPx)}px`, height: `${heightPx}px`, left: `${schedule.computedLeft}%`, width: `${schedule.computedWidth}%` }}>
                       <div className="flex justify-between items-start gap-1">
                         <span className={`font-black text-[9px] ${style.text}`}>{schedule.開始時間}</span>
                         <span className="bg-gray-100 text-gray-600 text-[8px] font-bold px-1 rounded truncate min-w-0">{schedule.wbItem === 'その他' ? schedule.wbItemDetail : schedule.wbItem}</span>
@@ -442,7 +501,6 @@ function WhiteboardContent() {
 
       {/* 2. メインキャンバス（スクロールエリア） */}
       <div className="flex-1 overflow-y-auto bg-[#f8f6f0] pb-[80px]">
-        {/* 固定スタッフヘッダー */}
         <div className="sticky top-0 z-30 flex pl-[36px] bg-[#f8f6f0]/95 backdrop-blur-sm border-b border-gray-200 py-1 shadow-sm">
           {assignees.map(staff => (
             <div key={staff} className="flex-1 text-center">
@@ -476,8 +534,8 @@ function WhiteboardContent() {
 
       {/* 3. 詳細モーダル */}
       {isDetailOpen && selectedSchedule && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-[#f8f6f0] w-full max-w-sm rounded-[20px] shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsDetailOpen(false)}>
+          <div className="bg-[#f8f6f0] w-full max-w-sm rounded-[20px] shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className={`px-5 py-3 flex justify-between items-center text-white ${selectedSchedule.isAbsence ? 'bg-red-500' : staffStyles[selectedSchedule.担当者].dot}`}>
               <h2 className="font-black text-sm tracking-widest">{selectedSchedule.isAbsence ? '休み設定の詳細' : '予定の詳細'}</h2>
               <button onClick={() => setIsDetailOpen(false)} className="text-xl leading-none">&times;</button>
@@ -515,8 +573,8 @@ function WhiteboardContent() {
 
             <div className="overflow-y-auto p-4 flex-1">
               <div className="flex bg-gray-200 rounded-lg p-1 mb-4">
-                <button type="button" onClick={() => setIsAbsenceMode(false)} className={`flex-1 py-2 rounded-md font-black text-[11px] transition-colors ${!isAbsenceMode ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>🛠 通常の予定</button>
-                <button type="button" onClick={() => setIsAbsenceMode(true)} className={`flex-1 py-2 rounded-md font-black text-[11px] transition-colors ${isAbsenceMode ? 'bg-red-500 text-white shadow-sm' : 'text-gray-500'}`}>🏖️ 休み登録</button>
+                <button type="button" onClick={() => handleAbsenceModeSwitch(false)} className={`flex-1 py-2 rounded-md font-black text-[11px] transition-colors ${!isAbsenceMode ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>🛠 通常の予定</button>
+                <button type="button" onClick={() => handleAbsenceModeSwitch(true)} className={`flex-1 py-2 rounded-md font-black text-[11px] transition-colors ${isAbsenceMode ? 'bg-red-500 text-white shadow-sm' : 'text-gray-500'}`}>🏖️ 休み登録</button>
               </div>
 
               <form onSubmit={handleSaveToGAS} className="space-y-4 pb-10">
@@ -570,9 +628,30 @@ function WhiteboardContent() {
                         <label className="block text-[10px] font-bold text-gray-600 mb-0.5">訪問先名（顧客名など）</label>
                         <input type="text" name="訪問先" value={formData.訪問先} onChange={handleFormChange} required className={inputBaseClass} />
                       </div>
+                      <div className={selectWrapperClass}>
+                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5">エリア</label>
+                        <select name="エリア" value={formData.エリア} onChange={handleFormChange} required className={inputBaseClass}>
+                          <option value="">(選択)</option>{areas.map(a => <option key={a} value={a}>{a}</option>)}
+                        </select>
+                      </div>
                       <div>
                         <label className="block text-[10px] font-bold text-gray-600 mb-0.5">場所の詳細 (WB表示用)</label>
                         <input type="text" name="locationDetail" value={formData.locationDetail} onChange={handleFormChange} required className={inputBaseClass} />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-3">
+                        <div className={selectWrapperClass}>
+                          <label className="block text-[10px] font-bold text-gray-600 mb-0.5">依頼内容</label>
+                          <select name="依頼内容" value={formData.依頼内容} onChange={handleFormChange} required className={inputBaseClass}>
+                            <option value="">(選択)</option>{requestContents.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <div className={selectWrapperClass}>
+                          <label className="block text-[10px] font-bold text-gray-600 mb-0.5">作業内容</label>
+                          <select name="作業内容" value={formData.作業内容} onChange={handleFormChange} required className={inputBaseClass}>
+                            <option value="">(選択)</option>{workContents.map(w => <option key={w} value={w}>{w}</option>)}
+                          </select>
+                        </div>
                       </div>
                     </div>
 
