@@ -42,18 +42,6 @@ const parseMins = (t: string) => {
   return h * 60 + m;
 };
 
-// ★ CDNからhtml2canvasを動的に読み込む裏技（インストール不要）
-const loadHtml2Canvas = async () => {
-  if ((window as any).html2canvas) return (window as any).html2canvas;
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
-    script.onload = () => resolve((window as any).html2canvas);
-    script.onerror = reject;
-    document.body.appendChild(script);
-  });
-};
-
 function WhiteboardContent() {
   const [mounted, setMounted] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -71,9 +59,8 @@ function WhiteboardContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAbsenceMode, setIsAbsenceMode] = useState(false); 
   
-  // ★ 追加機能用のステート
+  // スクショ用のズーム状態
   const [isZoomed, setIsZoomed] = useState(false);
-  const [isCapturing, setIsCapturing] = useState(false);
   
   const [formData, setFormData] = useState({
     タイムスタンプ: '', 日付: getTodayString(), 開始時間: '', 終了時間: '', 担当者: '', 訪問先: '', エリア: '', クライアント: '', 品目: '', 品番: '', 依頼内容: '', 作業内容: '', 作業区分: '修理', 技術料: '0', 修理金額: '0', 販売金額: '0', 提案有無: '無', 提案内容: '', 遠隔高速利用: '無', 伝票番号: '', 状況: '未完了(予定)', メモ: '', 成約有無: '無', locationDetail: '', wbItem: '', wbItemDetail: '', absenceType: '1日休み'
@@ -83,9 +70,9 @@ function WhiteboardContent() {
   const [isNoticeFormOpen, setIsNoticeFormOpen] = useState(false);
   const [noticeTargetDate, setNoticeTargetDate] = useState("");
 
-  // ★ ズーム状態に応じて高さを動的に変更
-  const dynamicHourHeight = isZoomed ? 28 : 50; 
-  const dynamicMinBlock = isZoomed ? 24 : 44; 
+  // ★ ズーム状態に応じて高さを動的に変更（縮小時は32px）
+  const dynamicHourHeight = isZoomed ? 32 : 50; 
+  const dynamicMinBlock = isZoomed ? 26 : 44; 
 
   useEffect(() => {
     setMounted(true);
@@ -248,9 +235,8 @@ function WhiteboardContent() {
     setIsFormOpen(true);
   };
 
-  // ★ 追加機能：空き時間タップ時の権限ブロック
+  // 他人の予定ブロック機能
   const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>, staff: string, targetDateStr: string) => {
-    // 権限チェック：自分が選ばれているのに、他人の列をタップした場合は弾く
     if (currentUser && currentUser !== staff) {
       alert(`※ 他の担当者（${staff}さん）の予定は作成できません。\n（全員の予定を作成する場合は、右上のユーザーを「未選択」にしてください）`);
       return;
@@ -307,7 +293,6 @@ function WhiteboardContent() {
       combinedMemo = combinedMemo ? `${wbMarker}\n${combinedMemo}` : wbMarker;
       finalPayload.訪問先 = formData.absenceType; 
       finalPayload.状況 = "休み";
-      
       finalPayload.エリア = "(-----)";
       finalPayload.品目 = "(-----)";
       finalPayload.依頼内容 = "(-----)";
@@ -317,7 +302,6 @@ function WhiteboardContent() {
       const finalItem = formData.wbItem === 'その他' ? formData.wbItemDetail : formData.wbItem;
       const wbMarker = `【WB予定】場所:${formData.locationDetail} / 品目:${finalItem}`;
       combinedMemo = combinedMemo ? `${wbMarker}\n${combinedMemo}` : wbMarker;
-      
       finalPayload.エリア = formData.エリア || "(-----)";
       finalPayload.品目 = "(-----)"; 
       finalPayload.依頼内容 = formData.依頼内容 || "(-----)";
@@ -339,33 +323,6 @@ function WhiteboardContent() {
       alert("通信エラーが発生しました。");
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  // ★ 追加機能：スクリーンショット（画像保存）の実行関数
-  const handleCapture = async () => {
-    try {
-      setIsCapturing(true);
-      const html2canvas = await loadHtml2Canvas();
-      const element = document.getElementById("timeline-capture-area");
-      if (!element) return;
-      
-      // 画像化の実行（iPadでも綺麗に撮れるように設定）
-      const canvas = await html2canvas(element, { 
-        scale: 2, 
-        useCORS: true,
-        backgroundColor: '#f8f6f0' // 背景色を確実に白・ベージュに
-      });
-      
-      // 画像をダウンロードさせる
-      const link = document.createElement('a');
-      link.download = `WB予定表_${dateString}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    } catch (err) {
-      alert("画像の保存に失敗しました。お手数ですが、縮小表示にして端末のスクリーンショットをお使いください。");
-    } finally {
-      setIsCapturing(false);
     }
   };
 
@@ -497,18 +454,29 @@ function WhiteboardContent() {
                     return (
                       <div key={schedule.タイムスタンプ || idx} onClick={(e) => openDetail(schedule, e)} className="absolute bg-red-500 rounded-[4px] shadow-sm cursor-pointer active:scale-95 transition-transform flex flex-col justify-center items-center overflow-hidden border border-red-600 z-20" 
                            style={{ top: `${Math.max(0, topPx)}px`, height: `${heightPx}px`, left: `${schedule.computedLeft}%`, width: `${schedule.computedWidth}%` }}>
-                        <span className="text-white font-black text-[10px] writing-vertical-rl">{schedule.absenceType}</span>
+                        <span className={`text-white font-black writing-vertical-rl ${isZoomed ? 'text-[8px]' : 'text-[10px]'}`}>{schedule.absenceType}</span>
                       </div>
                     );
                   }
                   return (
-                    <div key={schedule.タイムスタンプ || idx} onClick={(e) => openDetail(schedule, e)} className={`absolute bg-white rounded-[6px] shadow-md border ${style.border} border-l-[4px] cursor-pointer active:scale-95 transition-transform flex flex-col overflow-hidden p-1 z-20 leading-tight`} 
+                    <div key={schedule.タイムスタンプ || idx} onClick={(e) => openDetail(schedule, e)} className={`absolute bg-white rounded-[6px] shadow-md border ${style.border} border-l-[4px] cursor-pointer active:scale-95 transition-transform flex flex-col overflow-hidden ${isZoomed ? 'p-0.5' : 'p-1'} z-20 leading-tight`} 
                          style={{ top: `${Math.max(0, topPx)}px`, height: `${heightPx}px`, left: `${schedule.computedLeft}%`, width: `${schedule.computedWidth}%` }}>
-                      <div className="flex justify-between items-start gap-1">
-                        <span className={`font-black ${isZoomed ? 'text-[8px]' : 'text-[9px]'} ${style.text}`}>{schedule.開始時間}</span>
-                        <span className={`bg-gray-100 text-gray-600 font-bold px-1 rounded truncate min-w-0 ${isZoomed ? 'text-[7px]' : 'text-[8px]'}`}>{schedule.wbItem === 'その他' ? schedule.wbItemDetail : schedule.wbItem}</span>
-                      </div>
-                      <div className={`font-bold text-gray-800 mt-0.5 line-clamp-2 ${isZoomed ? 'text-[8px]' : 'text-[9px]'}`}>{schedule.locationDetail}</div>
+                      
+                      {/* ★ 文字潰れ対策：縮小時は時間表示を消して1行にまとめる */}
+                      {isZoomed ? (
+                        <div className="flex flex-col gap-0.5 justify-center h-full">
+                           <span className="bg-gray-100 text-gray-600 text-[7px] font-bold px-1 rounded truncate self-start">{schedule.wbItem === 'その他' ? schedule.wbItemDetail : schedule.wbItem}</span>
+                           <span className="font-bold text-[8px] text-gray-800 truncate">{schedule.locationDetail}</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex justify-between items-start gap-1">
+                            <span className={`font-black text-[9px] ${style.text}`}>{schedule.開始時間}</span>
+                            <span className="bg-gray-100 text-gray-600 text-[8px] font-bold px-1 rounded truncate min-w-0">{schedule.wbItem === 'その他' ? schedule.wbItemDetail : schedule.wbItem}</span>
+                          </div>
+                          <div className="font-bold text-[9px] text-gray-800 mt-0.5 line-clamp-2">{schedule.locationDetail}</div>
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -520,7 +488,6 @@ function WhiteboardContent() {
     );
   };
 
-  // ★ 詳細モーダルでの権限チェック変数
   const isEditable = !currentUser || !selectedSchedule || currentUser === selectedSchedule.担当者;
 
   return (
@@ -559,52 +526,56 @@ function WhiteboardContent() {
             </div>
           </div>
 
-          {/* ★ 追加機能：画像保存 ＆ 縮小ボタン */}
-          <div className="flex gap-2 pt-1 border-t border-gray-200 mt-1">
-            <button onClick={handleCapture} disabled={isCapturing} className="flex-1 bg-green-50 text-green-600 border border-green-200 font-black text-[10px] py-2 rounded-lg shadow-sm active:scale-95 transition-transform flex items-center justify-center disabled:opacity-50">
-               {isCapturing ? "📸 処理中..." : "📸 画像として保存"}
-            </button>
-            <button onClick={() => setIsZoomed(!isZoomed)} className="flex-1 bg-blue-50 text-blue-600 border border-blue-200 font-black text-[10px] py-2 rounded-lg shadow-sm active:scale-95 transition-transform flex items-center justify-center">
-               {isZoomed ? "🔍 標準サイズに戻す" : "🔍 1画面に縮小表示"}
+          {/* ★ UI改善：スタイリッシュな1ボタン縮小機能 */}
+          <div className="mt-1 pt-1 border-t border-gray-200">
+            <button 
+              onClick={() => setIsZoomed(!isZoomed)} 
+              className={`w-full py-2 rounded-xl font-black text-[11px] transition-all shadow-sm flex justify-center items-center gap-1.5 ${isZoomed ? 'bg-[#eaaa43] text-white' : 'bg-white text-gray-500 border border-gray-200'}`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                {isZoomed ? (
+                  <><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></>
+                ) : (
+                  <><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></>
+                )}
+              </svg>
+              {isZoomed ? "標準サイズに戻す" : "スクショ用に1画面に縮小する"}
             </button>
           </div>
         </div>
       </div>
 
-      {/* --- メインキャンバス領域（スクロール＆画像保存の対象） --- */}
+      {/* --- メインキャンバス領域 --- */}
       <div className="flex-1 overflow-y-auto bg-[#f8f6f0] pb-[80px]">
-        {/* ★ このid="timeline-capture-area" の中身だけが画像化されます */}
-        <div id="timeline-capture-area" className="bg-[#f8f6f0] max-w-md mx-auto pb-4">
-          <div className="sticky top-0 z-30 flex pl-[36px] bg-[#f8f6f0]/95 backdrop-blur-sm border-b border-gray-200 py-1 shadow-sm">
-            {assignees.map(staff => (
-              <div key={staff} className="flex-1 text-center">
-                <div className={`mx-0.5 py-1 rounded-[6px] ${staffStyles[staff].headerBg} border-b-2 ${staffStyles[staff].border}`}><span className="font-black text-[10px]">{staff}</span></div>
-              </div>
-            ))}
-          </div>
-
-          {viewMode === 'daily' ? (
-             <div className="flex flex-col relative">
-               <NoticeBanner targetDateStr={dateString} />
-               <TimelineCanvas targetDateStr={dateString} />
-             </div>
-          ) : (
-             <div className="flex flex-col gap-4 py-2">
-               {getWeekDates().map((date, i) => {
-                 const dStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-                 return (
-                   <div key={i} className="bg-white rounded-xl shadow-sm mx-1 overflow-hidden border border-gray-200 mt-2">
-                     <div className="bg-gray-100 px-3 py-1.5 font-black text-xs text-gray-700 border-b border-gray-200">
-                       {formatDateDisplay(date)}
-                     </div>
-                     <NoticeBanner targetDateStr={dStr} />
-                     <TimelineCanvas targetDateStr={dStr} />
-                   </div>
-                 );
-               })}
-             </div>
-          )}
+        <div className="sticky top-0 z-30 flex pl-[36px] bg-[#f8f6f0]/95 backdrop-blur-sm border-b border-gray-200 py-1 shadow-sm">
+          {assignees.map(staff => (
+            <div key={staff} className="flex-1 text-center">
+              <div className={`mx-0.5 py-1 rounded-[6px] ${staffStyles[staff].headerBg} border-b-2 ${staffStyles[staff].border}`}><span className="font-black text-[10px]">{staff}</span></div>
+            </div>
+          ))}
         </div>
+
+        {viewMode === 'daily' ? (
+           <div className="flex flex-col relative">
+             <NoticeBanner targetDateStr={dateString} />
+             <TimelineCanvas targetDateStr={dateString} />
+           </div>
+        ) : (
+           <div className="flex flex-col gap-4 py-2">
+             {getWeekDates().map((date, i) => {
+               const dStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+               return (
+                 <div key={i} className="bg-white rounded-xl shadow-sm mx-1 overflow-hidden border border-gray-200 mt-2">
+                   <div className="bg-gray-100 px-3 py-1.5 font-black text-xs text-gray-700 border-b border-gray-200">
+                     {formatDateDisplay(date)}
+                   </div>
+                   <NoticeBanner targetDateStr={dStr} />
+                   <TimelineCanvas targetDateStr={dStr} />
+                 </div>
+               );
+             })}
+           </div>
+        )}
       </div>
 
       {/* --- 詳細モーダル --- */}
@@ -632,7 +603,6 @@ function WhiteboardContent() {
             <div className="p-4 bg-gray-50 flex gap-2">
               <button onClick={() => setIsDetailOpen(false)} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-transform">閉じる</button>
               
-              {/* ★ 権限チェック：他人の予定なら編集・削除ボタンを隠す */}
               {isEditable ? (
                 <>
                   <button onClick={handleDelete} className="flex-1 bg-white border border-red-500 text-red-500 py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-transform">🗑️ 削除</button>
