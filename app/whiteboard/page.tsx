@@ -38,7 +38,6 @@ function formatDateDisplay(date: Date) {
   return `${date.getMonth() + 1}月${date.getDate()}日(${days[date.getDay()]})`;
 }
 
-// 時間を分に変換するヘルパー関数
 const parseMins = (t: string) => {
   if(!t) return 0;
   const [h, m] = t.split(':').map(Number);
@@ -90,8 +89,8 @@ function WhiteboardContent() {
       try { noticesData = await noticesRes.json(); } catch(e) { console.error("お知らせパースエラー", e); }
 
       const parsedSchedules = data.map((row: any) => {
-        let locDetail = row.訪問先 || "(場所未入力)";
-        let wItem = row.品目 || row.作業内容 || "未定";
+        let locDetail = row.場所の詳細 || row.訪問先 || "(場所未入力)"; 
+        let wItem = (row.品目 === '-' || row.品目 === '(-----)') ? "未定" : (row.品目 || "未定"); 
         let wItemDet = "";
         let isAbsence = false;
         let absType = "";
@@ -123,7 +122,7 @@ function WhiteboardContent() {
         }
 
         return {
-          ...row, // 元の全データ保持（エリア等のため）
+          ...row,
           タイムスタンプ: row.タイムスタンプ || "",
           日付: row.日付 || "", 担当者: row.担当者 || "", 開始時間: startTimeStr, 終了時間: endTimeStr, 訪問先: row.訪問先 || "", 依頼内容: row.依頼内容 || "", 作業内容: row.作業内容 || "", メモ: row.メモ || "", locationDetail: locDetail, wbItem: wItem, wbItemDetail: wItemDet, isAbsence, absenceType: absType
         };
@@ -198,7 +197,6 @@ function WhiteboardContent() {
     } else setFormData({ ...formData, 開始時間: start });
   };
 
-  // ★ 休みモード切り替え時の時間自動セット
   const handleAbsenceModeSwitch = (mode: boolean) => {
     setIsAbsenceMode(mode);
     if (mode) {
@@ -219,7 +217,7 @@ function WhiteboardContent() {
   };
 
   const openDetail = (schedule: any, e: React.MouseEvent) => {
-    e.stopPropagation(); // キャンバスへのクリックを防止
+    e.stopPropagation();
     setSelectedSchedule(schedule);
     setIsDetailOpen(true);
   };
@@ -232,7 +230,6 @@ function WhiteboardContent() {
     setIsFormOpen(true);
   };
 
-  // ★ 空欄タップ時の新規作成オープン
   const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>, staff: string, targetDateStr: string) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const offsetY = e.clientY - rect.top;
@@ -280,15 +277,29 @@ function WhiteboardContent() {
     let combinedMemo = formData.メモ.replace(/【WB(予定|休み)】.*?(?:\n|$)/g, '').trim();
     let finalPayload: any = { ...formData };
 
+    // ★ 修正のキモ：日報用の項目を「(-----)」で塗りつぶす（既存のコードを壊さない）
     if (isAbsenceMode) {
       const wbMarker = `【WB休み】種類:${formData.absenceType}`;
       combinedMemo = combinedMemo ? `${wbMarker}\n${combinedMemo}` : wbMarker;
       finalPayload.訪問先 = formData.absenceType; 
       finalPayload.状況 = "休み";
+      
+      finalPayload.エリア = "(-----)";
+      finalPayload.品目 = "(-----)";
+      finalPayload.依頼内容 = "(-----)";
+      finalPayload.作業内容 = "(-----)";
+      finalPayload.クライアント = "(-----)";
     } else {
       const finalItem = formData.wbItem === 'その他' ? formData.wbItemDetail : formData.wbItem;
       const wbMarker = `【WB予定】場所:${formData.locationDetail} / 品目:${finalItem}`;
       combinedMemo = combinedMemo ? `${wbMarker}\n${combinedMemo}` : wbMarker;
+      
+      // 通常予定の時も、未入力のものは「(-----)」で送る
+      finalPayload.エリア = formData.エリア || "(-----)";
+      finalPayload.品目 = "(-----)"; // WBの品目とは別物なので、日報用はハイフン扱いにする
+      finalPayload.依頼内容 = formData.依頼内容 || "(-----)";
+      finalPayload.作業内容 = formData.作業内容 || "(-----)";
+      finalPayload.クライアント = formData.クライアント || "(-----)";
     }
     
     finalPayload.メモ = combinedMemo;
@@ -344,7 +355,16 @@ function WhiteboardContent() {
   const inputBaseClass = "w-full bg-white border border-gray-300 rounded-[10px] px-3 py-2.5 text-[16px] text-gray-800 focus:outline-none focus:border-[#eaaa43] transition-all appearance-none";
   const selectWrapperClass = "relative after:content-['▼'] after:text-gray-400 after:text-[10px] after:absolute after:right-3 after:top-1/2 after:-translate-y-1/2 after:pointer-events-none";
 
-  // ★ 予定の被りを計算し、幅と位置を割り当てる関数（スプリット表示用）
+  const calculateCardStyle = (start: string, end: string) => {
+    const startMins = parseMins(start) - (START_HOUR * 60);
+    const endMins = parseMins(end) - (START_HOUR * 60);
+    const topPx = (startMins / 60) * HOUR_HEIGHT;
+    let heightPx = ((endMins - startMins) / 60) * HOUR_HEIGHT;
+    heightPx = Math.max(heightPx, MIN_BLOCK_HEIGHT); 
+    
+    return { top: `${Math.max(0, topPx)}px`, height: `${heightPx}px` };
+  };
+
   const processOverlaps = (staffSchedules: any[]) => {
     const parsed = staffSchedules.map(s => ({ ...s, startMins: parseMins(s.開始時間), endMins: parseMins(s.終了時間) }))
                                  .sort((a, b) => a.startMins - b.startMins);
@@ -419,13 +439,12 @@ function WhiteboardContent() {
         
         <div className="relative z-10 flex w-full pl-[36px] h-full cursor-pointer">
           {assignees.map(staff => {
-            // ★ スプリット表示のために processOverlaps を通す
             const staffSchedules = processOverlaps(daySchedules.filter(s => s.担当者 === staff));
             const style = staffStyles[staff];
             return (
               <div key={staff} 
                    className="flex-1 border-r border-gray-50 relative min-w-[50px] hover:bg-gray-50/50 transition-colors"
-                   onClick={(e) => handleCanvasClick(e, staff, targetDateStr)}> {/* ★ 空欄タップで新規作成 */}
+                   onClick={(e) => handleCanvasClick(e, staff, targetDateStr)}> 
                 
                 {staffSchedules.map((schedule, idx) => {
                   const startMins = schedule.startMins - (START_HOUR * 60);
@@ -499,7 +518,7 @@ function WhiteboardContent() {
         </div>
       </div>
 
-      {/* 2. メインキャンバス（スクロールエリア） */}
+      {/* 2. メインキャンバス */}
       <div className="flex-1 overflow-y-auto bg-[#f8f6f0] pb-[80px]">
         <div className="sticky top-0 z-30 flex pl-[36px] bg-[#f8f6f0]/95 backdrop-blur-sm border-b border-gray-200 py-1 shadow-sm">
           {assignees.map(staff => (
@@ -562,7 +581,7 @@ function WhiteboardContent() {
         </div>
       )}
 
-      {/* 4. 予定/休み登録 統合フォーム */}
+      {/* 4. 予定登録フォーム */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-end sm:items-center justify-center sm:p-4">
           <div className="bg-[#f8f6f0] rounded-t-[20px] sm:rounded-[20px] w-full max-w-md max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
@@ -630,8 +649,9 @@ function WhiteboardContent() {
                       </div>
                       <div className={selectWrapperClass}>
                         <label className="block text-[10px] font-bold text-gray-600 mb-0.5">エリア</label>
-                        <select name="エリア" value={formData.エリア} onChange={handleFormChange} required className={inputBaseClass}>
-                          <option value="">(選択)</option>{areas.map(a => <option key={a} value={a}>{a}</option>)}
+                        <select name="エリア" value={formData.エリア} onChange={handleFormChange} className={inputBaseClass}>
+                          <option value="">(任意)</option>
+                          {areas.map(a => <option key={a} value={a}>{a}</option>)}
                         </select>
                       </div>
                       <div>
@@ -642,14 +662,16 @@ function WhiteboardContent() {
                       <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-3">
                         <div className={selectWrapperClass}>
                           <label className="block text-[10px] font-bold text-gray-600 mb-0.5">依頼内容</label>
-                          <select name="依頼内容" value={formData.依頼内容} onChange={handleFormChange} required className={inputBaseClass}>
-                            <option value="">(選択)</option>{requestContents.map(r => <option key={r} value={r}>{r}</option>)}
+                          <select name="依頼内容" value={formData.依頼内容} onChange={handleFormChange} className={inputBaseClass}>
+                            <option value="">(任意)</option>
+                            {requestContents.map(r => <option key={r} value={r}>{r}</option>)}
                           </select>
                         </div>
                         <div className={selectWrapperClass}>
                           <label className="block text-[10px] font-bold text-gray-600 mb-0.5">作業内容</label>
-                          <select name="作業内容" value={formData.作業内容} onChange={handleFormChange} required className={inputBaseClass}>
-                            <option value="">(選択)</option>{workContents.map(w => <option key={w} value={w}>{w}</option>)}
+                          <select name="作業内容" value={formData.作業内容} onChange={handleFormChange} className={inputBaseClass}>
+                            <option value="">(任意)</option>
+                            {workContents.map(w => <option key={w} value={w}>{w}</option>)}
                           </select>
                         </div>
                       </div>
@@ -660,7 +682,8 @@ function WhiteboardContent() {
                       <div className={selectWrapperClass}>
                         <label className="block text-[10px] font-bold text-gray-600 mb-0.5">品目 (WB用)</label>
                         <select name="wbItem" value={formData.wbItem} onChange={handleFormChange} required className={inputBaseClass}>
-                          <option value="">(選択)</option>{wbItems.map(i => <option key={i} value={i}>{i}</option>)}
+                          <option value="">(選択)</option>
+                          {wbItems.map(i => <option key={i} value={i}>{i}</option>)}
                         </select>
                       </div>
                       {formData.wbItem === 'その他' && (
@@ -695,7 +718,7 @@ function WhiteboardContent() {
         </div>
       )}
 
-      {/* 6. フッターナビ（固定） */}
+      {/* 6. フッター */}
       <div className="fixed bottom-0 w-full bg-white rounded-t-[30px] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] h-[70px] flex justify-around items-center px-4 max-w-md mx-auto z-50">
         <Link href="/" className="p-2 cursor-pointer active:scale-90 transition-transform">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
